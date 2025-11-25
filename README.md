@@ -1,1 +1,4 @@
-# Proyecto_Lectura_G9
+# Proyecto G9
+- Carlos Carrasco
+- Diego Mosquera
+- Jorge Yugsi
