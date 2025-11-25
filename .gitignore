@@ -1,0 +1,24 @@
+# Archivos compilados de Python (Basura)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales (Si creaste uno)
+venv/
+env/
+.env
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Carpetas de IDE (VS Code)
+.vscode/
+.idea/
+
+# Si por error se generaron carpetas de datos de Docker aquí dentro
+postgres_data/
+mongo_data/
