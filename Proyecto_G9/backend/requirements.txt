@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pymongo
+pydantic
+python-dotenv
+
+# para instalar estas dependencias 
+# poner en la terminal pip install -r requirements.txt
