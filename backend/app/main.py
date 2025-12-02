@@ -1,39 +1,68 @@
-from fastapi import FastAPI, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from app.core.database import get_db, telemetry_collection, client
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.database import db, client # Importamos la conexión Mongo directa
+from app.services.ml_engine import ai_engine # Importamos tu nuevo cerebro IA
+from app.api import routes
 
-app = FastAPI()
+app = FastAPI(title="API TDAH - Arquitectura NoSQL + ML", version="2.0.0")
+
+app.include_router(routes.router, prefix="/api")
+
+# Configuración CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- ZONA DE PRUEBAS ---
+
+@app.on_event("startup")
+async def startup_event():
+    print("🧠 Inicializando Sistema Multi-Modelo...")
+    ai_engine.train_mock_models() 
+    print("✅ IA Calibrada para 4 juegos.")
 
 @app.get("/")
-def root():
-    return {"message": "Modo Diagnóstico Activo"}
+def read_root():
+    return {"message": "Sistema TDAH v2.0 (Mongo + AI)"}
 
 @app.get("/health-check")
-def health_check(db: Session = Depends(get_db)):
+def health_check():
+    """
+    Verifica Mongo y hace una prueba de predicción en vivo.
+    """
     status = {
-        "postgres_status": "Revisando...",
-        "mongo_status": "Revisando...",
-        "postgres_error": None,
-        "mongo_error": None
+        "mongo_status": "Desconectado",
+        "ai_status": "Inactivo",
+        "prueba_prediccion": None
     }
-    
-    # 1. PRUEBA POSTGRESQL
-    try:
-        db.execute(text("SELECT 1"))
-        status["postgres_status"] = "✅ CONECTADO EXITOSAMENTE"
-    except Exception as e:
-        status["postgres_status"] = "❌ FALLÓ"
-        # Convertimos el error a string para verlo en el navegador
-        status["postgres_error"] = str(e)
 
-    # 2. PRUEBA MONGODB
+    # 1. Probar MongoDB
     try:
-        # Comando ping administrativo
         client.admin.command('ping')
-        status["mongo_status"] = "✅ CONECTADO EXITOSAMENTE"
+        # Contar documentos en la colección de usuarios para ver si lee
+        doc_count = db["users"].count_documents({})
+        status["mongo_status"] = f"✅ Conectado (Docs en users: {doc_count})"
     except Exception as e:
-        status["mongo_status"] = "❌ FALLÓ"
-        status["mongo_error"] = str(e)
+        status["mongo_status"] = f"❌ Error: {str(e)}"
+
+    # 2. Probar Machine Learning
+    try:
+        # Simulamos un niño con tiempo de reacción 400ms (Normal)
+        prediccion_normal = ai_engine.predict(400, 2) 
+        
+        # Simulamos un niño con tiempo 900ms y muchos errores (Riesgo)
+        prediccion_riesgo = ai_engine.predict(900, 15)
+        
+        status["ai_status"] = "✅ Motor Funcionando"
+        status["prueba_prediccion"] = {
+            "caso_normal": prediccion_normal,
+            "caso_riesgo": prediccion_riesgo
+        }
+    except Exception as e:
+        status["ai_status"] = f"❌ Error IA: {str(e)}"
 
     return status

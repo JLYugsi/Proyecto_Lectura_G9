@@ -1,40 +1,33 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+import os
+from dotenv import load_dotenv
 from pymongo import MongoClient
 
-# ---------------------------------------------------------
-# CREDENCIALES: Deben coincidir con docker-compose.yml
-# ---------------------------------------------------------
-USER = "admin"
-PASS = "password123"  # <--- ¡SI CAMBIASTE LA PASS EN DOCKER, CÁMBIALA AQUÍ!
-HOST = "127.0.0.1"    # Usamos IP directa para evitar errores de localhost en Windows
+# Cargar variables de entorno
+load_dotenv()
 
-# 1. CONFIGURACIÓN POSTGRESQL
-# Puerto 5432 es el estándar
-SQL_DB_NAME = "tdah_gamification_db"
-SQLALCHEMY_DATABASE_URL = f"postgresql://{USER}:{PASS}@{HOST}:5432/{SQL_DB_NAME}"
+USER = os.getenv("MONGO_USER")
+PASS = os.getenv("MONGO_PASSWORD")
+HOST = os.getenv("MONGO_HOST")
+PORT = os.getenv("MONGO_PORT")
+DB_NAME = os.getenv("MONGO_DB")
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# 2. CONFIGURACIÓN MONGODB
-# Puerto 27018 es el que definimos en Docker para no chocar con tu Mongo local
-MONGO_PORT = 27018
-MONGO_DB_NAME = "tdah_logs_db"
-MONGO_URI = f"mongodb://{USER}:{PASS}@{HOST}:{MONGO_PORT}/"
+# Construir URI
+# Nota: Si alguna variable es None, esto fallará. Asegúrate de tener el archivo .env
+MONGO_URI = f"mongodb://{USER}:{PASS}@{HOST}:{PORT}/"
 
 try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    mongo_db = client[MONGO_DB_NAME]
-    telemetry_collection = mongo_db["game_telemetry"]
-    print(f"--- INTENTO DE CONEXIÓN MONGO A {HOST}:{MONGO_PORT} ---")
+    client = MongoClient(MONGO_URI)
+    db = client[DB_NAME]
+    
+    # --- DEFINICIÓN DE COLECCIONES ---
+    users_collection = db["users"]
+    children_collection = db["children"]
+    results_collection = db["results"]
+    
+    # ESTA FUE LA LÍNEA QUE FALTÓ:
+    badges_collection = db["badges"] 
+    
+    print(f"--- CONEXIÓN MONGO EXITOSA A {DB_NAME} ---")
+
 except Exception as e:
-    print(f"--- ERROR CONFIGURANDO MONGO: {e} ---")
+    print(f"❌ ERROR CRÍTICO DE BD: {e}")
