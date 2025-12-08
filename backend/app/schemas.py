@@ -61,3 +61,11 @@ class ChildDashboard(BaseModel):
     child_info: ChildOut
     recent_results: List[ResultHistory]
     badges_earned: List[str] # Lista de nombres de medallas
+    
+class LoginInput(BaseModel):
+    username: str
+    password: str
+
+class LoginSuccess(BaseModel):
+    user_id: str
+    username: str
