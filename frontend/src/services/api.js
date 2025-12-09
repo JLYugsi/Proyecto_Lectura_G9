@@ -48,4 +48,9 @@ export const getUserChildren = async (userId) => {
   return response.data;
 };
 
+export const deleteChild = async (childId) => {
+  const response = await api.delete(`/children/${childId}`);
+  return response.data;
+};
+
 export default api;

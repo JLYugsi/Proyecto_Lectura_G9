@@ -1,0 +1,46 @@
+============================================================
+GUÍA DE INSTALACIÓN DEL FRONTEND (PROYECTO TDAH)
+============================================================
+
+REQUISITOS PREVIOS:
+- Tener Node.js instalado (versión 16 o superior).
+- Tener acceso a la carpeta /frontend del proyecto.
+
+------------------------------------------------------------
+MÉTODO 1: INSTALACIÓN AUTOMÁTICA (RECOMENDADO)
+------------------------------------------------------------
+Si ya tienes el archivo 'package.json' dentro de la carpeta,
+no necesitas instalar las librerías una por una.
+
+1. Abre la terminal en la carpeta /frontend.
+2. Ejecuta el siguiente comando:
+
+   npm install
+
+Esto leerá el archivo package.json e instalará todas las versiones
+exactas que se están usando en el proyecto.
+
+------------------------------------------------------------
+MÉTODO 2: INSTALACIÓN MANUAL DE DEPENDENCIAS
+------------------------------------------------------------
+Si necesitas instalar las librerías desde cero en un proyecto limpio,
+copia y pega estos comandos en orden:
+
+# 1. Navegación y Rutas
+npm install react-router-dom axios
+
+# 2. Iconos e Interfaz Visual
+npm install lucide-react
+
+# 3. Gráficos y Estadísticas (Para el Radar Chart)
+npm install chart.js react-chartjs-2
+
+# 4. Motor de Videojuegos (Para el test gamificado)
+npm install phaser
+
+------------------------------------------------------------
+PARA INICIAR EL PROYECTO
+------------------------------------------------------------
+Una vez instaladas las dependencias:
+
+   npm run dev

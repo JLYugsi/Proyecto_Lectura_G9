@@ -4,161 +4,162 @@ from app.services.ml_engine import ai_engine
 from app import schemas
 from bson import ObjectId
 from datetime import datetime
-from typing import List
+from typing import List, Dict, Any
+import statistics # <--- IMPORTANTE PARA LA ROBUSTEZ MATEMÁTICA
 
 router = APIRouter()
 
 # --- HELPER: Convertir ObjectId a String ---
 def fix_id(doc):
-    """
-    Transforma el _id (ObjectId) de Mongo a un string "id"
-    para que Pydantic no se queje.
-    """
     if doc:
         doc["id"] = str(doc.pop("_id"))
     return doc
 
 # ==========================================
-# 1. AUTENTICACIÓN Y USUARIOS
+# 0. LÓGICA CIENTÍFICA (Perfil Cognitivo)
 # ==========================================
+def calculate_cognitive_profile(metrics: Dict[str, Any]) -> Dict[str, int]:
+    """
+    Genera un perfil de 4 dimensiones (0-100) basado en datos crudos.
+    """
+    # 1. ATENCIÓN (Basado en Omisiones)
+    omissions = metrics.get("omission_errors", 0)
+    attn_score = max(0, 100 - (omissions * 15)) 
 
+    # 2. IMPULSIVIDAD (Basado en Comisiones)
+    commissions = metrics.get("commission_errors", 0)
+    impulse_control = max(0, 100 - (commissions * 10))
+
+    # 3. VELOCIDAD (Basado en Promedio ms)
+    rt_avg = metrics.get("reaction_time_avg", 0)
+    if rt_avg == 0: speed_score = 0
+    elif rt_avg < 250: speed_score = 100 # Sospechosamente rápido
+    elif rt_avg > 800: speed_score = 40  # Lento
+    else: speed_score = 100 - ((rt_avg - 250) * 0.12)
+
+    # 4. CONSISTENCIA (Desviación Estándar - Marcador clave TDAH)
+    rt_raw = metrics.get("reaction_times_raw", [])
+    if len(rt_raw) > 1:
+        stdev = statistics.stdev(rt_raw)
+        # stdev < 80ms es excelente (100). stdev > 200ms es muy inconsistente.
+        consistency_score = max(0, 100 - ((stdev - 50) * 0.5))
+    else:
+        consistency_score = 50 # Neutro si no hay datos
+
+    return {
+        "atencion": round(attn_score),
+        "impulsividad": round(impulse_control),
+        "velocidad": round(speed_score),
+        "consistencia": round(consistency_score)
+    }
+
+# ==========================================
+# 1. USUARIOS Y AUTH
+# ==========================================
 @router.post("/users/", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate):
-    """Registra al padre/tutor en el sistema"""
-    # 1. Verificar si el email ya existe
     if users_collection.find_one({"email": user.email}):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Este correo electrónico ya está registrado"
-        )
-    
-    # 2. Insertar
-    user_dict = user.model_dump()
-    result = users_collection.insert_one(user_dict)
-    
-    # 3. Retornar con ID convertido
-    return {
-        "id": str(result.inserted_id),
-        "username": user.username,
-        "email": user.email
-    }
+        raise HTTPException(status_code=400, detail="Email registrado")
+    result = users_collection.insert_one(user.model_dump())
+    return {"id": str(result.inserted_id), "username": user.username, "email": user.email}
 
 @router.post("/login", response_model=schemas.LoginSuccess)
 def login(creds: schemas.LoginInput):
-    """Login simple buscando por username"""
     user = users_collection.find_one({"username": creds.username})
-    
-    # Validación básica (En producción real usarías hash para passwords)
     if not user or user["password"] != creds.password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="Usuario o contraseña incorrectos"
-        )
-    
-    return {
-        "user_id": str(user["_id"]),
-        "username": user["username"]
-    }
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    return {"user_id": str(user["_id"]), "username": user["username"]}
 
 # ==========================================
-# 2. GESTIÓN DE NIÑOS (RELACIÓN PADRE-HIJO)
+# 2. GESTIÓN DE NIÑOS
 # ==========================================
-
 @router.post("/users/{user_id}/children/", response_model=schemas.ChildOut)
 def create_child(user_id: str, child: schemas.ChildCreate):
-    """
-    Crea un perfil de niño vinculado al ID del padre proporcionado en la URL.
-    """
-    # PASO 1: Validar formato de ObjectId
     if not ObjectId.is_valid(user_id):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="El ID del usuario no tiene un formato válido"
-        )
+        raise HTTPException(status_code=400, detail="ID inválido")
+    if not users_collection.find_one({"_id": ObjectId(user_id)}):
+        raise HTTPException(status_code=404, detail="Padre no encontrado")
 
-    # PASO 2: Verificar que el padre EXISTA
-    parent = users_collection.find_one({"_id": ObjectId(user_id)})
-    if not parent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail="El usuario padre no existe"
-        )
-
-    # PASO 3: Preparar datos (Esquema + ID del padre)
     child_dict = child.model_dump()
-    # Convertimos fecha a string ISO para evitar problemas de serialización en Mongo
     child_dict["birth_date"] = child.birth_date.isoformat() 
     child_dict["parent_id"] = user_id 
     
-    # PASO 4: Guardar
     result = children_collection.insert_one(child_dict)
-    
-    # PASO 5: Retornar (Pydantic espera 'id', 'name', 'parent_id')
-    return {
-        "id": str(result.inserted_id),
-        "name": child.name,
-        "parent_id": user_id
-    }
+    return {**child_dict, "id": str(result.inserted_id)}
 
-@router.get("/users/{user_id}/children", response_model=List[schemas.ChildOut])
+@router.get("/users/{user_id}/children")
 def get_user_children(user_id: str):
-    """Obtiene todos los hijos asociados a un padre"""
+    """
+    Obtiene hijos Y su último perfil cognitivo para el Dashboard.
+    Nota: Retornamos Dict libre para incluir 'latest_profile' sin error de Schema.
+    """
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="ID inválido")
 
     cursor = children_collection.find({"parent_id": user_id})
-    
     children_list = []
+    
     for doc in cursor:
-        children_list.append(fix_id(doc))
+        child = fix_id(doc)
+        # Buscar el resultado más reciente de este niño para el gráfico
+        last_result = results_collection.find_one(
+            {"child_id": child["id"]}, 
+            sort=[("timestamp", -1)]
+        )
+        
+        if last_result and "cognitive_profile" in last_result:
+            child["latest_profile"] = last_result["cognitive_profile"]
+        else:
+            child["latest_profile"] = None
+            
+        children_list.append(child)
         
     return children_list
 
-# ==========================================
-# 3. CEREBRO IA Y RESULTADOS
-# ==========================================
+@router.delete("/children/{child_id}")
+def delete_child(child_id: str):
+    if not ObjectId.is_valid(child_id):
+        raise HTTPException(status_code=400, detail="ID inválido")
+    
+    if not children_collection.find_one({"_id": ObjectId(child_id)}):
+        raise HTTPException(status_code=404, detail="Niño no encontrado")
 
+    children_collection.delete_one({"_id": ObjectId(child_id)})
+    results_collection.delete_many({"child_id": child_id})
+
+    return {"message": "Perfil eliminado correctamente"}
+
+# ==========================================
+# 3. ANÁLISIS Y RESULTADOS
+# ==========================================
 @router.post("/analyze", response_model=schemas.AnalysisOutput)
 def analyze_game_result(data: schemas.GameResultInput):
-    """
-    Recibe métricas -> Ejecuta ML -> Asigna Medallas -> Guarda Resultado
-    """
-    # 1. Extracción de Métricas (Normalización de nombres de variables)
     metrics = data.detailed_metrics
     
-    ai_reaction_time = 0
-    # Algunos juegos usan 'reaction_time_avg', otros 'completion_time_ms'
-    if "reaction_time_avg" in metrics:
-        ai_reaction_time = metrics["reaction_time_avg"]
-    elif "completion_time_ms" in metrics:
-        ai_reaction_time = metrics["completion_time_ms"]
+    # 1. Calcular Perfil Robusto
+    profile = calculate_cognitive_profile(metrics)
     
-    # Sumar errores de todos los tipos posibles
-    ai_errors = metrics.get("total_errors", 0) + \
-                metrics.get("omission_errors", 0) + \
-                metrics.get("commission_errors", 0) + \
-                metrics.get("sequence_errors", 0)
+    # 2. Diagnóstico IA basado en el perfil calculado
+    risk_count = 0
+    if profile["consistencia"] < 60: risk_count += 1
+    if profile["impulsividad"] < 60: risk_count += 1
+    if profile["atencion"] < 50: risk_count += 1
 
-    # 2. INFERENCIA IA (Usando tus datos simulados científicos)
-    verdict = ai_engine.predict(data.game_code, ai_reaction_time, ai_errors)
+    verdict = "Patrón de Riesgo TDAH" if risk_count >= 2 else "Patrón Neurotípico (Normal)"
 
-    # 3. Lógica de Gamificación (Medallas)
+    # 3. Medallas
     badge = None
-    if verdict == "Patrón Neurotípico (Normal)":
-        # Reglas ejemplo para medallas
-        if data.game_code == "cpt" and ai_errors == 0:
-            badge = "Defensor Perfecto"
-        elif data.game_code == "tmt" and metrics.get("completion_time_ms", 99999) < 40000:
-            badge = "Conector Veloz"
-        elif data.game_code == "caras" and ai_errors == 0:
-            badge = "Ojo de Águila"
+    if profile["atencion"] >= 95 and profile["impulsividad"] >= 95:
+        badge = "Defensor Perfecto"
+    elif profile["velocidad"] > 90 and profile["consistencia"] > 80:
+        badge = "Rayo Láser"
 
-    # 4. Guardar en MongoDB
+    # 4. Guardar
     result_doc = {
         "child_id": data.child_id,
         "game_code": data.game_code,
-        "metrics": metrics, # Guardamos el JSON crudo para futuros estudios
-        "ai_input_used": { "time": ai_reaction_time, "errors": ai_errors },
+        "metrics": metrics,
+        "cognitive_profile": profile, # Guardamos el perfil para el gráfico
         "ai_diagnosis": verdict,
         "badge": badge,
         "timestamp": datetime.utcnow()
@@ -167,30 +168,22 @@ def analyze_game_result(data: schemas.GameResultInput):
 
     return {
         "verdict": verdict,
-        "confidence_score": 0.95, # Valor simulado alto
+        "confidence_score": 0.90,
         "badge_awarded": badge
     }
 
 # ==========================================
-# 4. DASHBOARD (VISTA DEL PADRE)
+# 4. DASHBOARD DETALLADO
 # ==========================================
-
 @router.get("/children/{child_id}/dashboard", response_model=schemas.ChildDashboard)
 def get_child_dashboard(child_id: str):
-    """
-    Recopila toda la info para pintar la pantalla de estadísticas
-    """
     if not ObjectId.is_valid(child_id):
-        raise HTTPException(status_code=400, detail="ID de formato inválido")
+        raise HTTPException(status_code=400, detail="ID inválido")
 
-    # 1. Buscar info del niño
     child_doc = children_collection.find_one({"_id": ObjectId(child_id)})
-    if not child_doc:
-        raise HTTPException(status_code=404, detail="Niño no encontrado")
+    if not child_doc: raise HTTPException(status_code=404, detail="No encontrado")
 
-    # 2. Buscar historial de juegos
     cursor = results_collection.find({"child_id": child_id}).sort("timestamp", -1)
-    
     results_list = []
     badges_set = set()
 
@@ -202,11 +195,8 @@ def get_child_dashboard(child_id: str):
             "metrics": doc.get("metrics"),
             "badge": doc.get("badge")
         })
-        
-        if doc.get("badge"):
-            badges_set.add(doc.get("badge"))
+        if doc.get("badge"): badges_set.add(doc.get("badge"))
 
-    # 3. Ensamblar respuesta completa
     return {
         "child_info": fix_id(child_doc),
         "recent_results": results_list,
