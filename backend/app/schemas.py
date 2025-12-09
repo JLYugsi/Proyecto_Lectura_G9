@@ -23,6 +23,12 @@ class ChildOut(BaseModel):
     id: str
     name: str
     parent_id: str
+    birth_date: date 
+    gender: str      
+
+    class Config:
+        # Esto permite que Pydantic lea objetos ORM o dicts de Mongo
+        from_attributes = True
 
 # --- 3. JUEGOS Y RESULTADOS (INPUT PARA LA IA) ---
 class GameResultInput(BaseModel):
