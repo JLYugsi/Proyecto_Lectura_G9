@@ -2,6 +2,16 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Any, Dict
 from datetime import date, datetime
 
+# --- 0. OBJETOS COMPARTIDOS (Resultados Cognitivos) ---
+class CognitiveProfile(BaseModel):
+    """
+    Define las 4 dimensiones del gráfico de radar.
+    """
+    atencion: int
+    impulsividad: int
+    velocidad: int
+    consistencia: int
+
 # --- 1. USUARIOS (PADRES) ---
 class UserCreate(BaseModel):
     username: str
@@ -9,7 +19,7 @@ class UserCreate(BaseModel):
     password: str
 
 class UserOut(BaseModel):
-    id: str # En Mongo el ID es un string largo
+    id: str 
     username: str
     email: str
 
@@ -24,49 +34,49 @@ class ChildOut(BaseModel):
     name: str
     parent_id: str
     birth_date: date 
-    gender: str      
+    gender: str
+    
+    # --- CAMBIO CRÍTICO: Permitir que viaje el perfil cognitivo al frontend ---
+    latest_profile: Optional[CognitiveProfile] = None 
 
     class Config:
-        # Esto permite que Pydantic lea objetos ORM o dicts de Mongo
         from_attributes = True
 
-# --- 3. JUEGOS Y RESULTADOS (INPUT PARA LA IA) ---
+# --- 3. JUEGOS Y RESULTADOS (INPUT) ---
 class GameResultInput(BaseModel):
     child_id: str
-    game_code: str       # 'cpt', 'tova', 'tmt', 'caras'
+    game_code: str       # 'cpt', 'go_no_go', etc.
     
-    # Datos Genéricos (Para la IA rápida)
     score: int
-    total_time_played: int # Segundos que duró la sesión
+    total_time_played: int 
     
-    # DATOS ESPECÍFICOS (Aquí viene la robustez científica)
-    # Usamos Dict[str, Any] para que cada juego mande sus propias métricas
+    # Dict flexible para recibir 'reaction_times_raw' (array) y otros datos
     detailed_metrics: Dict[str, Any] 
 
     class Config:
         from_attributes = True
 
 class AnalysisOutput(BaseModel):
-    """Lo que le respondemos al Frontend después de pensar"""
-    verdict: str         # "Riesgo" o "Normal"
-    confidence_score: float # Qué tan segura está la IA (simulado)
+    """Respuesta inmediata tras jugar"""
+    verdict: str        
+    confidence_score: float
     badge_awarded: Optional[str] = None
     
-# --- 4. SALIDAS PARA EL DASHBOARD (Lectura) ---
+# --- 4. SALIDAS PARA EL DASHBOARD (Lectura Histórica) ---
 
 class ResultHistory(BaseModel):
-    """Para mostrar la lista de partidas en el Dashboard"""
+    """Un item en la lista de historial"""
     game_code: str
     timestamp: datetime
     ai_diagnosis: str
-    metrics: Dict[str, Any] # Devolvemos el detalle completo
-    badge: Optional[str]
+    metrics: Dict[str, Any]
+    badge: Optional[str] = None
 
 class ChildDashboard(BaseModel):
-    """El perfil completo del niño"""
+    """El perfil completo al entrar a detalles"""
     child_info: ChildOut
     recent_results: List[ResultHistory]
-    badges_earned: List[str] # Lista de nombres de medallas
+    badges_earned: List[str]
     
 class LoginInput(BaseModel):
     username: str

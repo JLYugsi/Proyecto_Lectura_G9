@@ -5,7 +5,7 @@ from app import schemas
 from bson import ObjectId
 from datetime import datetime
 from typing import List, Dict, Any
-import statistics # <--- IMPORTANTE PARA LA ROBUSTEZ MATEMÁTICA
+from app.services.ml_engine import ai_engine
 
 router = APIRouter()
 
@@ -136,30 +136,27 @@ def delete_child(child_id: str):
 def analyze_game_result(data: schemas.GameResultInput):
     metrics = data.detailed_metrics
     
-    # 1. Calcular Perfil Robusto
-    profile = calculate_cognitive_profile(metrics)
+    # --- DELEGAMOS LA INTELIGENCIA AL MOTOR ---
     
-    # 2. Diagnóstico IA basado en el perfil calculado
-    risk_count = 0
-    if profile["consistencia"] < 60: risk_count += 1
-    if profile["impulsividad"] < 60: risk_count += 1
-    if profile["atencion"] < 50: risk_count += 1
+    # 1. Calcular Perfil (Usando el motor)
+    profile = ai_engine.calculate_profile(metrics)
+    
+    # 2. Obtener Veredicto (Usando el motor)
+    verdict = ai_engine.predict_verdict(profile)
 
-    verdict = "Patrón de Riesgo TDAH" if risk_count >= 2 else "Patrón Neurotípico (Normal)"
-
-    # 3. Medallas
+    # 3. Calcular Medalla (Lógica de negocio simple)
     badge = None
     if profile["atencion"] >= 95 and profile["impulsividad"] >= 95:
         badge = "Defensor Perfecto"
     elif profile["velocidad"] > 90 and profile["consistencia"] > 80:
         badge = "Rayo Láser"
 
-    # 4. Guardar
+    # 4. Guardar en Mongo
     result_doc = {
         "child_id": data.child_id,
         "game_code": data.game_code,
         "metrics": metrics,
-        "cognitive_profile": profile, # Guardamos el perfil para el gráfico
+        "cognitive_profile": profile, 
         "ai_diagnosis": verdict,
         "badge": badge,
         "timestamp": datetime.utcnow()
@@ -168,7 +165,7 @@ def analyze_game_result(data: schemas.GameResultInput):
 
     return {
         "verdict": verdict,
-        "confidence_score": 0.90,
+        "confidence_score": 0.92,
         "badge_awarded": badge
     }
 

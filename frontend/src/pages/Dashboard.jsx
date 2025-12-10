@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUserChildren, createChild, deleteChild } from "../services/api";
 import { PlusCircle, User, Gamepad2, Activity, Lock, Trash2 } from "lucide-react";
-import CognitiveRadar from "../components/charts/CognitiveRadar";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -18,7 +17,7 @@ const Dashboard = () => {
   const [newChildAge, setNewChildAge] = useState("");
   const [newChildGender, setNewChildGender] = useState("M");
 
-  // Estados para PIN
+  // Estados para el PIN de Sesión
   const [showPinModal, setShowPinModal] = useState(false);
   const [sessionPin, setSessionPin] = useState("");
   const [selectedChildForPlay, setSelectedChildForPlay] = useState(null);
@@ -70,36 +69,45 @@ const Dashboard = () => {
   };
 
   const handleDelete = async (childId, childName) => {
-    const confirm = window.confirm(`¿Estás seguro de que quieres eliminar el perfil de ${childName}?`);
+    // Confirmación simple
+    const confirm = window.confirm(`¿Estás seguro de que quieres eliminar el perfil de ${childName}? Esta acción borrará todo su historial.`);
+    
     if (confirm) {
         try {
             await deleteChild(childId);
-            loadChildren(userId);
+            loadChildren(userId); // Recargar lista
         } catch (error) {
             alert("Error al eliminar el perfil.");
+            console.error(error);
         }
     }
   };
 
+  // 1. Iniciar Secuencia de Juego (Pedir PIN)
   const initiatePlaySequence = (childId, childName) => {
     setSelectedChildForPlay({ id: childId, name: childName });
     setSessionPin(""); 
     setShowPinModal(true);
   };
 
+  // 2. Confirmar PIN e ir a la Sala de Juegos
   const confirmPinAndPlay = (e) => {
     e.preventDefault();
     if (sessionPin.length !== 4) {
         alert("El PIN debe tener 4 dígitos");
         return;
     }
+
     localStorage.setItem("current_child_id", selectedChildForPlay.id);
     localStorage.setItem("current_child_name", selectedChildForPlay.name);
+    
     navigate("/gameroom", { state: { exitPin: sessionPin } });
   };
 
   return (
     <div className="container-fluid min-vh-100 bg-light">
+      
+      {/* NAVBAR */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
         <div className="container">
           <span className="navbar-brand fw-bold d-flex align-items-center">
@@ -115,6 +123,7 @@ const Dashboard = () => {
         </div>
       </nav>
 
+      {/* CONTENIDO PRINCIPAL */}
       <div className="container">
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2 className="text-secondary fw-bold">Mis Pacientes / Hijos</h2>
@@ -123,6 +132,7 @@ const Dashboard = () => {
           </button>
         </div>
 
+        {/* FORMULARIO DE AGREGAR */}
         {showAddForm && (
           <div className="card mb-4 border-0 shadow-sm animate__animated animate__fadeIn">
             <div className="card-body bg-white rounded">
@@ -148,6 +158,7 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* LISTA DE NIÑOS */}
         {loading ? <p className="text-center">Cargando...</p> : children.length === 0 ? (
           <div className="text-center py-5"><h4 className="text-muted">No tienes niños registrados.</h4></div>
         ) : (
@@ -156,38 +167,44 @@ const Dashboard = () => {
               <div key={child.id} className="col-md-4 mb-4">
                 <div className="card h-100 border-0 shadow-sm hover-shadow transition-all position-relative">
                   
-                  {/* Botón Eliminar */}
-                  <button className="btn btn-link text-danger position-absolute top-0 end-0 m-2" onClick={() => handleDelete(child.id, child.name)}>
+                  {/* BOTÓN ELIMINAR (Esquina Superior Derecha) */}
+                  <button 
+                    className="btn btn-link text-danger position-absolute top-0 end-0 m-2"
+                    onClick={() => handleDelete(child.id, child.name)}
+                    title="Eliminar Perfil"
+                  >
                     <Trash2 size={20} />
                   </button>
 
-                  <div className="card-body text-center">
+                  <div className="card-body text-center mt-3">
+                    {/* AVATAR */}
                     <div className="avatar-circle bg-primary text-white mx-auto mb-3 d-flex align-items-center justify-content-center" style={{width: '60px', height: '60px', borderRadius: '50%', fontSize: '24px'}}>
                       {child.name.charAt(0).toUpperCase()}
                     </div>
+                    
+                    {/* DATOS */}
                     <h4 className="card-title fw-bold">{child.name}</h4>
-                    <p className="text-muted small mb-3">
+                    <p className="text-muted small mb-4">
                        {child.birth_date ? new Date().getFullYear() - new Date(child.birth_date).getFullYear() : 'N/A'} años • {child.gender === 'M' ? 'Niño' : 'Niña'}
                     </p>
 
-                    {/* --- ZONA DE RESULTADOS (RADAR CHART) --- */}
-                    {child.latest_profile ? (
-                      <div className="mb-3">
-                        <div className="bg-dark rounded p-2 border border-secondary" style={{ height: '220px' }}>
-                           <h6 className="text-secondary small text-uppercase mb-2">Perfil Cognitivo</h6>
-                           <CognitiveRadar profile={child.latest_profile} />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="alert alert-light border mb-3 py-4">
-                        <Activity className="text-muted mb-2"/>
-                        <p className="small text-muted m-0">Sin partidas recientes.</p>
-                      </div>
-                    )}
+                    {/* BOTONES DE ACCIÓN */}
+                    <div className="d-grid gap-2">
+                        <button 
+                            className="btn btn-primary fw-bold d-flex align-items-center justify-content-center py-2"
+                            onClick={() => initiatePlaySequence(child.id, child.name)}
+                        >
+                          <Gamepad2 className="me-2" size={20} /> JUGAR TEST
+                        </button>
+                        
+                        <button 
+                            className="btn btn-outline-secondary fw-bold d-flex align-items-center justify-content-center py-2"
+                            onClick={() => navigate(`/results/${child.id}`)}
+                        >
+                          <Activity className="me-2" size={20} /> VER RESULTADOS
+                        </button>
+                    </div>
 
-                    <button className="btn btn-primary w-100 fw-bold" onClick={() => initiatePlaySequence(child.id, child.name)}>
-                      <Gamepad2 className="me-2" size={18} /> JUGAR TEST
-                    </button>
                   </div>
                 </div>
               </div>
@@ -196,17 +213,32 @@ const Dashboard = () => {
         )}
       </div>
 
+      {/* MODAL DE PIN DE SESIÓN */}
       {showPinModal && (
         <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 1050 }}>
             <div className="bg-white p-4 rounded-4 shadow-lg text-center animate__animated animate__zoomIn" style={{maxWidth: '400px'}}>
                 <div className="text-primary mb-3"><Lock size={40}/></div>
                 <h4 className="fw-bold">Seguridad Parental</h4>
-                <p className="text-muted small">Configura un PIN de 4 dígitos para esta sesión.</p>
+                <p className="text-muted small">Configura un PIN de 4 dígitos para esta sesión.<br/>(Lo necesitarás para salir del juego)</p>
+                
                 <form onSubmit={confirmPinAndPlay}>
-                    <input type="password" inputMode="numeric" maxLength="4" className="form-control form-control-lg text-center fs-2 letter-spacing-2 mb-4" placeholder="••••" value={sessionPin} onChange={(e) => setSessionPin(e.target.value.replace(/[^0-9]/g, ''))} autoFocus />
+                    <input 
+                        type="password" 
+                        inputMode="numeric" 
+                        maxLength="4"
+                        className="form-control form-control-lg text-center fs-2 letter-spacing-2 mb-4" 
+                        placeholder="••••"
+                        value={sessionPin}
+                        onChange={(e) => setSessionPin(e.target.value.replace(/[^0-9]/g, ''))}
+                        autoFocus
+                    />
                     <div className="d-grid gap-2">
-                        <button type="submit" className="btn btn-primary btn-lg fw-bold" disabled={sessionPin.length !== 4}>CONFIRMAR</button>
-                        <button type="button" className="btn btn-link text-muted" onClick={() => setShowPinModal(false)}>Cancelar</button>
+                        <button type="submit" className="btn btn-primary btn-lg fw-bold" disabled={sessionPin.length !== 4}>
+                            CONFIRMAR E INICIAR
+                        </button>
+                        <button type="button" className="btn btn-link text-muted" onClick={() => setShowPinModal(false)}>
+                            Cancelar
+                        </button>
                     </div>
                 </form>
             </div>
