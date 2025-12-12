@@ -6,7 +6,6 @@ class TMTScene extends Phaser.Scene {
   }
 
   init(data) {
-    // callback que nos pasa React
     this.onGameEnd = data.onGameEnd || (() => {});
   }
 
@@ -15,27 +14,27 @@ class TMTScene extends Phaser.Scene {
     this.nodes = [];
     this.nodeGraphics = this.add.graphics();
     this.laserGraphics = this.add.graphics();
-    this.currentIndex = 0;          // índice del siguiente nodo correcto
+    this.currentIndex = 0;          
     this.sequenceErrors = 0;
     this.reactionTimes = [];
     this.clickLog = [];
     this.lastClickTime = null;
     this.gameCompleted = false;
 
-    this.totalNodes = 12;           // puedes ajustar la cantidad
+    this.totalNodes = 12;          
     this.startTime = this.time.now;
 
-    // ---------- Fondo tipo sci-fi sencillo ----------
+    // ---------- Fondo sci-fi ----------
     this.cameras.main.setBackgroundColor('#020820');
     this._createStarfield();
 
     // ---------- HUD ----------
     this._createHUD();
 
-    // ---------- Nodos del TMT ----------
+    // ---------- Nodos ----------
     this._createNodes();
 
-    // ---------- Timer de actualización ----------
+    // ---------- Timer ----------
     this.time.addEvent({
       delay: 100,
       loop: true,
@@ -61,32 +60,21 @@ class TMTScene extends Phaser.Scene {
 
   _createHUD() {
     this.add.text(
-      this.scale.width / 2,
-      30,
+      this.scale.width / 2, 30,
       'Ingeniero de Sistemas – Conecta los nodos en orden',
-      {
-        fontFamily: 'Arial',
-        fontSize: '20px',
-        color: '#00ffcc'
-      }
+      { fontFamily: 'Arial', fontSize: '20px', color: '#00ffcc' }
     ).setOrigin(0.5);
 
     this.timerText = this.add.text(20, 20, 'Tiempo: 0.0 s', {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#ffffff'
+      fontFamily: 'Arial', fontSize: '16px', color: '#ffffff'
     });
 
     this.progressText = this.add.text(20, 45, 'Progreso: 0 / 12', {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#ffffff'
+      fontFamily: 'Arial', fontSize: '16px', color: '#ffffff'
     });
 
     this.errorText = this.add.text(20, 70, 'Errores secuencia: 0', {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#ff6666'
+      fontFamily: 'Arial', fontSize: '16px', color: '#ff6666'
     });
   }
 
@@ -108,9 +96,7 @@ class TMTScene extends Phaser.Scene {
       node.setInteractive({ useHandCursor: true });
 
       const text = this.add.text(position.x, position.y, String(label), {
-        fontFamily: 'Arial',
-        fontSize: '18px',
-        color: '#ffffff'
+        fontFamily: 'Arial', fontSize: '18px', color: '#ffffff'
       }).setOrigin(0.5);
 
       node.label = label;
@@ -128,14 +114,13 @@ class TMTScene extends Phaser.Scene {
   }
 
   _getNonOverlappingPosition(margin) {
-    // generación simple, suficiente para pocos nodos
     let x, y;
     let tries = 0;
     const minDistance = 70;
 
     do {
       x = Phaser.Math.Between(margin, this.scale.width - margin);
-      y = Phaser.Math.Between(margin + 40, this.scale.height - margin); // +40 para no tapar HUD
+      y = Phaser.Math.Between(margin + 40, this.scale.height - margin);
       tries++;
       if (tries > 100) break;
     } while (
@@ -154,13 +139,12 @@ class TMTScene extends Phaser.Scene {
   _handleNodeClick(node) {
     if (this.gameCompleted) return;
 
-    const expectedLabel = this.currentIndex + 1; // esperamos 1, luego 2, etc.
+    const expectedLabel = this.currentIndex + 1;
     const clickedLabel = node.label;
     const now = this.time.now;
 
     const isCorrect = clickedLabel === expectedLabel;
 
-    // Log de clic
     this.clickLog.push({
       time_ms: now - this.startTime,
       label: clickedLabel,
@@ -171,26 +155,21 @@ class TMTScene extends Phaser.Scene {
     });
 
     if (isCorrect) {
-      // tiempo de vuelo
       if (this.lastClickTime !== null) {
         const rt = now - this.lastClickTime;
         this.reactionTimes.push(rt);
       }
       this.lastClickTime = now;
 
-      // feedback visual de nodo correcto
       this._markNodeAsCorrect(node);
 
-      // dibujar línea láser desde el nodo anterior
       if (this.currentIndex > 0) {
         const prevNode = this.nodes[this.currentIndex - 1];
         this._drawLaser(prevNode.x, prevNode.y, node.x, node.y);
       }
 
       this.currentIndex++;
-      this.progressText.setText(
-        `Progreso: ${this.currentIndex} / ${this.totalNodes}`
-      );
+      this.progressText.setText(`Progreso: ${this.currentIndex} / ${this.totalNodes}`);
 
       if (this.currentIndex >= this.totalNodes) {
         this._endGame();
@@ -218,7 +197,6 @@ class TMTScene extends Phaser.Scene {
     this.laserGraphics.lineTo(x2, y2);
     this.laserGraphics.strokePath();
 
-    // pequeño resplandor animado
     const glow = this.add.circle(x2, y2, 6, 0x00ffff, 1);
     this.tweens.add({
       targets: glow,
@@ -230,10 +208,7 @@ class TMTScene extends Phaser.Scene {
   }
 
   _flashError(node) {
-    // guardamos el color original según si ya estaba correcto o no
     const originalColor = node.clicked ? 0x00ffcc : 0x111133;
-
-    // lo pintamos de rojo para indicar error
     node.setFillStyle(0xff0000, 0.8);
 
     this.tweens.add({
@@ -244,7 +219,6 @@ class TMTScene extends Phaser.Scene {
       scaleX: 1.2,
       scaleY: 1.2,
       onYoyo: () => {
-        // en el yoyo podemos devolverlo al color original
         node.setFillStyle(originalColor, 0.8);
       },
       onComplete: () => {
@@ -254,68 +228,58 @@ class TMTScene extends Phaser.Scene {
     });
   }
 
+  // ================== FIN DEL JUEGO (CORREGIDO) ==================
 
-   _endGame() {
+  _endGame() {
     if (this.gameCompleted) return;
     this.gameCompleted = true;
 
     const endTime = this.time.now;
     const totalTime = endTime - this.startTime;
 
-    // --- Métricas crudas del TMT ---
-    const rawResults = {
-      game: 'TMT',
-      game_name: 'Ingeniero de Sistemas',
-      total_time_ms: Math.round(totalTime),
-      nodes_total: this.totalNodes,
-      nodes_completed: this.currentIndex,
-      sequence_errors: this.sequenceErrors,
-      reaction_times_ms: this.reactionTimes,
-      clicks_log: this.clickLog,
-      started_at_ms: Math.round(this.startTime),
-      finished_at_ms: Math.round(endTime)
-    };
-
-    // --- Cálculo de un "score" simple 0–100 ---
+    // Calcular promedio de tiempo de reacción (entre nodos)
     let avgRt = 0;
     if (this.reactionTimes.length > 0) {
       const sum = this.reactionTimes.reduce((a, b) => a + b, 0);
       avgRt = sum / this.reactionTimes.length;
     }
 
-    // Penalizamos errores de secuencia y tiempos muy lentos.
-    // Esto es solo una heurística inicial, luego se puede refinar en el backend.
+    // Cálculo de Score (0-100)
     let score = 100;
-
-    // Cada error de secuencia penaliza 8 puntos
-    score -= this.sequenceErrors * 8;
-
-    // Si el tiempo medio entre nodos es muy lento (> 2000 ms), penalizamos
+    score -= this.sequenceErrors * 8; // Penalización por error
     if (avgRt > 2000) {
-      score -= ((avgRt - 2000) / 100); // 100 ms extra = -1 punto
+      score -= ((avgRt - 2000) / 100); // Penalización por lentitud extrema
     }
-
-    // Normalizamos
     score = Math.max(0, Math.min(100, Math.round(score)));
 
+    // --- MAPEO DE DATOS PARA EL BACKEND (Vital para el gráfico de radar) ---
     const detailed_metrics = {
-      raw: rawResults,
-      summary: {
-        avg_reaction_time_ms: Math.round(avgRt),
-        sequence_errors: this.sequenceErrors,
+      // 1. Datos crudos para consistencia (StDev)
+      reaction_times_raw: this.reactionTimes,
+      
+      // 2. Variables estándar del ML
+      reaction_time_avg: Math.round(avgRt),
+      
+      // En TMT, equivocarse de nodo es IMPULSIVIDAD (Comisión)
+      commission_errors: this.sequenceErrors,
+      
+      // En TMT no hay omisiones por tiempo límite en esta versión
+      omission_errors: 0,
+      
+      total_errors: this.sequenceErrors,
+      
+      // Datos extra específicos de TMT
+      tmt_specific: {
         total_time_ms: Math.round(totalTime),
-        nodes_total: this.totalNodes,
         nodes_completed: this.currentIndex
       }
     };
 
-    // --- Esto es lo que verá GameRoom.handleGameEnd ---
     const payload = {
       score,
       detailed_metrics
     };
 
-    // pequeña pausa para que el jugador vea el último efecto
     this.time.delayedCall(800, () => {
       try {
         this.onGameEnd(payload);
@@ -324,6 +288,7 @@ class TMTScene extends Phaser.Scene {
       }
       this.scene.stop();
     });
-    }
+  }
 }
+
 export default TMTScene;

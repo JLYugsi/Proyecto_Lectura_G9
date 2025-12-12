@@ -38,6 +38,8 @@ npm install chart.js react-chartjs-2
 # 4. Motor de Videojuegos (Para el test gamificado)
 npm install phaser
 
+# 5. libreria de graficos de resultados
+npm install recharts
 ------------------------------------------------------------
 PARA INICIAR EL PROYECTO
 ------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUserChildren, createChild, deleteChild } from "../services/api";
-import { PlusCircle, User, Gamepad2, Activity, Lock, Trash2 } from "lucide-react";
+import { PlusCircle, User, Gamepad2, Activity, Lock, Trash2, Calendar } from "lucide-react";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -14,7 +14,10 @@ const Dashboard = () => {
   // Estados para formularios
   const [showAddForm, setShowAddForm] = useState(false);
   const [newChildName, setNewChildName] = useState("");
-  const [newChildAge, setNewChildAge] = useState("");
+  
+  const [newChildBirthDate, setNewChildBirthDate] = useState(""); 
+  const [agePreview, setAgePreview] = useState(null); 
+  
   const [newChildGender, setNewChildGender] = useState("M");
 
   // Estados para el PIN de Sesión
@@ -47,35 +50,72 @@ const Dashboard = () => {
     }
   };
 
+  // --- SOLUCIÓN: Función para calcular la edad visualmente (Reutilizable) ---
+  const calculateAge = (birthDateString) => {
+    if (!birthDateString) return "?";
+    
+    const today = new Date();
+    const birthDate = new Date(birthDateString);
+    
+    // Validar si la fecha es válida
+    if (isNaN(birthDate.getTime())) return "?";
+
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const handleDateChange = (e) => {
+    const dateVal = e.target.value;
+    setNewChildBirthDate(dateVal);
+    // Usamos la misma función de cálculo para el preview
+    if (dateVal) {
+        setAgePreview(calculateAge(dateVal));
+    } else {
+        setAgePreview(null);
+    }
+  };
+
   const handleAddChild = async (e) => {
     e.preventDefault();
-    try {
-      const birthYear = new Date().getFullYear() - newChildAge;
-      const birthDate = `${birthYear}-01-01`;
 
+    // Validación lógica
+    if (!newChildName.trim() || !newChildBirthDate) {
+      alert("Por favor, completa obligatoriamente el Nombre y la Fecha de Nacimiento.");
+      return; 
+    }
+
+    try {
       await createChild(userId, {
         name: newChildName,
-        birth_date: birthDate,
+        birth_date: newChildBirthDate,
         gender: newChildGender
       });
       
       await loadChildren(userId);
       setShowAddForm(false);
+      
+      // Limpiar formulario
       setNewChildName("");
-      setNewChildAge("");
+      setNewChildBirthDate("");
+      setAgePreview(null);
     } catch (error) {
-      alert("Error al registrar niño");
+      console.error(error);
+      alert("Error al registrar niño. Verifica los datos.");
     }
   };
 
   const handleDelete = async (childId, childName) => {
-    // Confirmación simple
     const confirm = window.confirm(`¿Estás seguro de que quieres eliminar el perfil de ${childName}? Esta acción borrará todo su historial.`);
     
     if (confirm) {
         try {
             await deleteChild(childId);
-            loadChildren(userId); // Recargar lista
+            loadChildren(userId); 
         } catch (error) {
             alert("Error al eliminar el perfil.");
             console.error(error);
@@ -83,14 +123,12 @@ const Dashboard = () => {
     }
   };
 
-  // 1. Iniciar Secuencia de Juego (Pedir PIN)
   const initiatePlaySequence = (childId, childName) => {
     setSelectedChildForPlay({ id: childId, name: childName });
     setSessionPin(""); 
     setShowPinModal(true);
   };
 
-  // 2. Confirmar PIN e ir a la Sala de Juegos
   const confirmPinAndPlay = (e) => {
     e.preventDefault();
     if (sessionPin.length !== 4) {
@@ -136,20 +174,52 @@ const Dashboard = () => {
         {showAddForm && (
           <div className="card mb-4 border-0 shadow-sm animate__animated animate__fadeIn">
             <div className="card-body bg-white rounded">
-              <h5 className="card-title text-primary mb-3">Registrar Nuevo Niño</h5>
-              <form onSubmit={handleAddChild} className="row g-3">
+              <h5 className="card-title text-primary mb-3">Registrar Nuevo Paciente</h5>
+              <form onSubmit={handleAddChild} className="row g-3 align-items-end">
+                
+                {/* Nombre */}
                 <div className="col-md-4">
-                  <input type="text" className="form-control" placeholder="Nombre" value={newChildName} onChange={e => setNewChildName(e.target.value)} required />
+                  <label className="form-label small text-muted">Nombre *</label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    placeholder="Nombre completo" 
+                    value={newChildName} 
+                    onChange={e => setNewChildName(e.target.value)} 
+                    required 
+                  />
                 </div>
-                <div className="col-md-2">
-                  <input type="number" className="form-control" placeholder="Edad" value={newChildAge} onChange={e => setNewChildAge(e.target.value)} required />
-                </div>
+                
+                {/* Input de Fecha con Preview de Edad */}
                 <div className="col-md-3">
-                  <select className="form-select" value={newChildGender} onChange={e => setNewChildGender(e.target.value)}>
+                  <label className="form-label small text-muted">Fecha de Nacimiento *</label>
+                  <div className="input-group">
+                    <input 
+                        type="date" 
+                        className="form-control" 
+                        value={newChildBirthDate} 
+                        onChange={handleDateChange} 
+                        required 
+                    />
+                  </div>
+                  {agePreview !== null && (
+                      <div className="form-text text-success fw-bold">
+                         <Calendar size={12} className="me-1"/>
+                         Edad: {agePreview} años
+                      </div>
+                  )}
+                </div>
+
+                {/* Género */}
+                <div className="col-md-2">
+                   <label className="form-label small text-muted">Género</label>
+                   <select className="form-select" value={newChildGender} onChange={e => setNewChildGender(e.target.value)}>
                     <option value="M">Masculino</option>
                     <option value="F">Femenino</option>
                   </select>
                 </div>
+
+                {/* Botón */}
                 <div className="col-md-3">
                   <button type="submit" className="btn btn-primary w-100">Guardar</button>
                 </div>
@@ -167,7 +237,7 @@ const Dashboard = () => {
               <div key={child.id} className="col-md-4 mb-4">
                 <div className="card h-100 border-0 shadow-sm hover-shadow transition-all position-relative">
                   
-                  {/* BOTÓN ELIMINAR (Esquina Superior Derecha) */}
+                  {/* BOTÓN ELIMINAR */}
                   <button 
                     className="btn btn-link text-danger position-absolute top-0 end-0 m-2"
                     onClick={() => handleDelete(child.id, child.name)}
@@ -184,8 +254,10 @@ const Dashboard = () => {
                     
                     {/* DATOS */}
                     <h4 className="card-title fw-bold">{child.name}</h4>
+                    
+                    {/* CORRECCIÓN AQUÍ: Calculamos la edad si child.age falla */}
                     <p className="text-muted small mb-4">
-                       {child.birth_date ? new Date().getFullYear() - new Date(child.birth_date).getFullYear() : 'N/A'} años • {child.gender === 'M' ? 'Niño' : 'Niña'}
+                        {child.age || calculateAge(child.birth_date)} años • {child.gender === 'M' ? 'Niño' : 'Niña'}
                     </p>
 
                     {/* BOTONES DE ACCIÓN */}

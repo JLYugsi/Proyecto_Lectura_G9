@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, computed_field
 from typing import List, Optional, Any, Dict
 from datetime import date, datetime
 
@@ -26,7 +26,7 @@ class UserOut(BaseModel):
 # --- 2. NIÑOS (PACIENTES) ---
 class ChildCreate(BaseModel):
     name: str
-    birth_date: date
+    birth_date: date # Se recibe fecha (YYYY-MM-DD)
     gender: str
 
 class ChildOut(BaseModel):
@@ -36,8 +36,18 @@ class ChildOut(BaseModel):
     birth_date: date 
     gender: str
     
-    # --- CAMBIO CRÍTICO: Permitir que viaje el perfil cognitivo al frontend ---
+    # Permitir que viaje el perfil cognitivo al frontend
     latest_profile: Optional[CognitiveProfile] = None 
+
+    # --- CAMBIO IMPORTANTE: CÁLCULO AUTOMÁTICO DE EDAD ---
+    # Esto no se guarda en BD, se calcula al vuelo cada vez que pides el niño
+    @computed_field
+    def age(self) -> int:
+        today = date.today()
+        # Cálculo preciso de edad considerando mes y día
+        return today.year - self.birth_date.year - (
+            (today.month, today.day) < (self.birth_date.month, self.birth_date.day)
+        )
 
     class Config:
         from_attributes = True
@@ -74,7 +84,7 @@ class ResultHistory(BaseModel):
 
 class ChildDashboard(BaseModel):
     """El perfil completo al entrar a detalles"""
-    child_info: ChildOut
+    child_info: ChildOut # Al usar ChildOut aquí, heredamos el cálculo de edad
     recent_results: List[ResultHistory]
     badges_earned: List[str]
     

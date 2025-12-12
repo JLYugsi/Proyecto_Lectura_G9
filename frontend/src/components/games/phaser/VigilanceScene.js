@@ -10,40 +10,55 @@ class VigilanceScene extends Phaser.Scene {
   }
 
   create() {
-    // ---------- Estado Interno ----------
+    // ======================================================
+    // 1. LIMPIEZA INICIAL (Asegura un estado fresco)
+    // ======================================================
+    this.events.off('shutdown'); // Evita duplicar listeners
+    this.events.on('shutdown', this._cleanup, this);
+
+    // ======================================================
+    // 2. ESTADO INTERNO (Reinicio de variables)
+    // ======================================================
     this.objects = [];
-    this.startTime = this.time.now;
+    this.startTime = this.time.now; // Marca el nuevo tiempo de inicio
     this.gameCompleted = false;
 
-    this.totalTargets = 8;          // Objetivos (cristales)
-    this.numDistractors = 45;       // Distractores
+    this.totalTargets = 8;          
+    this.numDistractors = 45;       
     this.targetsFound = 0;
     this.falseAlarms = 0;
     this.clicksLog = [];
     this.firstTargetTime = null;
 
-    this.timeLimitMs = 90000;       // ⬅️ 90 segundos para evitar "me saca del juego"
+    this.timeLimitMs = 90000;       
 
-    // ---------- Fondo ----------
+    // ======================================================
+    // 3. CONFIGURACIÓN VISUAL Y OBJETOS
+    // ======================================================
     this.cameras.main.setBackgroundColor('#020820');
     this._createStarfield();
-
-    // ---------- HUD ----------
     this._createHUD();
-
-    // ---------- Objetos ----------
     this._spawnObjects();
 
-    // ---------- Timer ----------
-    this.time.addEvent({
+    // ======================================================
+    // 4. TEMPORIZADOR (Con referencia para poder detenerlo)
+    // ======================================================
+    // Si existía un timer previo, Phaser suele limpiarlo al reiniciar la escena,
+    // pero guardarlo en una variable nos da control total.
+    this.gameTimer = this.time.addEvent({
       delay: 100,
       loop: true,
       callback: () => {
+        if (this.gameCompleted) return;
+
         const elapsed = this.time.now - this.startTime;
         const remaining = Math.max(0, this.timeLimitMs - elapsed);
+        
+        // Actualizar texto
         this.timerText.setText(`Tiempo: ${(remaining / 1000).toFixed(1)} s`);
 
-        if (!this.gameCompleted && elapsed >= this.timeLimitMs) {
+        // Verificar fin del tiempo
+        if (elapsed >= this.timeLimitMs) {
           this._endGame('time_up');
         }
       }
@@ -64,32 +79,21 @@ class VigilanceScene extends Phaser.Scene {
 
   _createHUD() {
     this.add.text(
-      this.scale.width / 2,
-      30,
+      this.scale.width / 2, 30,
       'Radar de Exploración – Encuentra los cristales azules',
-      {
-        fontFamily: 'Arial',
-        fontSize: '20px',
-        color: '#00e5ff'
-      }
+      { fontFamily: 'Arial', fontSize: '20px', color: '#00e5ff' }
     ).setOrigin(0.5);
 
     this.timerText = this.add.text(20, 20, 'Tiempo: 90.0 s', {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#ffffff'
+      fontFamily: 'Arial', fontSize: '16px', color: '#ffffff'
     });
 
     this.targetsText = this.add.text(20, 45, `Objetivos: 0 / ${this.totalTargets}`, {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#80ff80'
+      fontFamily: 'Arial', fontSize: '16px', color: '#80ff80'
     });
 
     this.errorsText = this.add.text(20, 70, 'Errores (falsas alarmas): 0', {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#ff6666'
+      fontFamily: 'Arial', fontSize: '16px', color: '#ff6666'
     });
   }
 
@@ -132,9 +136,7 @@ class VigilanceScene extends Phaser.Scene {
         targets: rock,
         y: rock.y + Phaser.Math.Between(-5, 5),
         duration: Phaser.Math.Between(1500, 2500),
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
       });
 
       this.objects.push(rock);
@@ -146,24 +148,17 @@ class VigilanceScene extends Phaser.Scene {
       const size = Phaser.Math.Between(22, 32);
 
       const crystal = this.add.polygon(
-        pos.x,
-        pos.y,
+        pos.x, pos.y,
         [0, -size / 2, size / 2, 0, 0, size / 2, -size / 2, 0],
-        0x00cfff,
-        0.95
+        0x00cfff, 0.95
       );
 
       crystal.isTarget = true;
       crystal.collected = false;
-
       crystal.setStrokeStyle(2, 0xffffff);
 
-      // 🔥 HITBOX GRANDE Y CÓMODO
       const radius = size * 1.2;
-      crystal.setInteractive(
-        new Phaser.Geom.Circle(0, 0, radius),
-        Phaser.Geom.Circle.Contains
-      );
+      crystal.setInteractive(new Phaser.Geom.Circle(0, 0, radius), Phaser.Geom.Circle.Contains);
 
       crystal.on('pointerdown', () => this._handleClick(crystal));
 
@@ -172,9 +167,7 @@ class VigilanceScene extends Phaser.Scene {
         y: crystal.y + Phaser.Math.Between(-6, 6),
         angle: Phaser.Math.Between(-6, 6),
         duration: Phaser.Math.Between(1200, 2000),
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut'
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
       });
 
       this.objects.push(crystal);
@@ -188,20 +181,12 @@ class VigilanceScene extends Phaser.Scene {
 
     const now = this.time.now;
     const elapsed = now - this.startTime;
-
     const type = obj.isTarget ? 'target' : 'distractor';
 
-    // log de clic
-    this.clicksLog.push({
-      time_ms: Math.round(elapsed),
-      x: obj.x,
-      y: obj.y,
-      type
-    });
+    this.clicksLog.push({ time_ms: Math.round(elapsed), x: obj.x, y: obj.y, type });
 
     if (obj.isTarget) {
-      if (obj.collected) return; // evita errores
-
+      if (obj.collected) return;
       obj.collected = true;
 
       if (this.firstTargetTime === null) {
@@ -210,7 +195,6 @@ class VigilanceScene extends Phaser.Scene {
 
       this.targetsFound++;
       this.targetsText.setText(`Objetivos: ${this.targetsFound} / ${this.totalTargets}`);
-
       this._collectTargetAnimation(obj);
 
       if (this.targetsFound >= this.totalTargets) {
@@ -226,95 +210,56 @@ class VigilanceScene extends Phaser.Scene {
 
   _collectTargetAnimation(obj) {
     this.tweens.add({
-      targets: obj,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      alpha: 0,
-      duration: 300,
-      onComplete: () => obj.destroy()
+      targets: obj, scaleX: 1.5, scaleY: 1.5, alpha: 0, duration: 300, onComplete: () => obj.destroy()
     });
-
     const glow = this.add.circle(obj.x, obj.y, 10, 0x00ffff, 1);
     this.tweens.add({
-      targets: glow,
-      alpha: 0,
-      scale: 3,
-      duration: 400,
-      onComplete: () => glow.destroy()
+      targets: glow, alpha: 0, scale: 3, duration: 400, onComplete: () => glow.destroy()
     });
   }
 
   _flashError(obj) {
     const original = obj.isTarget ? 0x00cfff : 0x444444;
-
     obj.setFillStyle(0xff0000, 0.9);
-
     this.tweens.add({
-      targets: obj,
-      duration: 90,
-      repeat: 2,
-      yoyo: true,
-      scaleX: 1.2,
-      scaleY: 1.2,
+      targets: obj, duration: 90, repeat: 2, yoyo: true, scaleX: 1.2, scaleY: 1.2,
       onYoyo: () => obj.setFillStyle(original),
-      onComplete: () => {
-        obj.setScale(1);
-        obj.setFillStyle(original);
-      }
+      onComplete: () => { obj.setScale(1); obj.setFillStyle(original); }
     });
   }
 
-  // ===================== FIN DEL JUEGO ======================
+  // ===================== FIN DEL JUEGO Y LIMPIEZA ======================
 
   _endGame(reason) {
     if (this.gameCompleted) return;
     this.gameCompleted = true;
 
+    // DETENER EL TIMER INMEDIATAMENTE
+    if (this.gameTimer) {
+        this.gameTimer.remove();
+    }
+
     const endTime = this.time.now;
     const totalTime = endTime - this.startTime;
 
-    const miss = this.totalTargets - this.targetsFound;
+    const omissions = this.totalTargets - this.targetsFound;
+    const accuracy = this.totalTargets > 0 ? this.targetsFound / this.totalTargets : 0;
 
-    const accuracy = this.totalTargets > 0
-      ? this.targetsFound / this.totalTargets
-      : 0;
-
-    const rawResults = {
-      game: 'Vigilance',
-      game_name: 'Radar de Exploración',
-      end_reason: reason,
-      total_time_ms: Math.round(totalTime),
-      time_to_first_target_ms: this.firstTargetTime,
-      targets_total: this.totalTargets,
-      targets_found: this.targetsFound,
-      false_alarms: this.falseAlarms,
-      accuracy,
-      clicks_log: this.clicksLog,
-      started_at_ms: Math.round(this.startTime),
-      finished_at_ms: Math.round(endTime)
-    };
-
-    // -------- SCORE (0-100) --------
-    let score = 100;
-
-    score -= miss * 6;
-    score -= this.falseAlarms * 3;
-
+    let score = 100 - (omissions * 6) - (this.falseAlarms * 3);
     if (this.firstTargetTime && this.firstTargetTime > 5000) {
       score -= (this.firstTargetTime - 5000) / 300;
     }
-
     score = Math.max(0, Math.min(100, Math.round(score)));
 
     const detailed_metrics = {
-      raw: rawResults,
-      summary: {
-        total_time_ms: Math.round(totalTime),
-        time_to_first_target_ms: this.firstTargetTime,
-        targets_total: this.totalTargets,
-        targets_found: this.targetsFound,
-        false_alarms: this.falseAlarms,
-        accuracy
+      reaction_time_avg: this.firstTargetTime ? Math.round(this.firstTargetTime) : 0,
+      reaction_times_raw: [], 
+      commission_errors: this.falseAlarms,
+      omission_errors: omissions,
+      total_errors: this.falseAlarms + omissions,
+      vigilance_specific: {
+        accuracy: accuracy,
+        total_time_ms: Math.round(totalTime)
       }
     };
 
@@ -326,8 +271,18 @@ class VigilanceScene extends Phaser.Scene {
       } catch (e) {
         console.error("Error al enviar resultados Vigilance:", e);
       }
+      
+      // Detenemos la escena completamente
       this.scene.stop();
     });
+  }
+
+  _cleanup() {
+    if (this.gameTimer) {
+        this.gameTimer.remove();
+        this.gameTimer = null;
+    }
+    this.tweens.killAll();
   }
 }
 
