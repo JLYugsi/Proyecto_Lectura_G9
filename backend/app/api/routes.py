@@ -5,7 +5,8 @@ from app import schemas
 from bson import ObjectId
 from datetime import datetime
 from typing import List, Dict, Any
-from app.services.ml_engine import ai_engine
+import statistics
+from pymongo import ReturnDocument
 
 router = APIRouter()
 
@@ -16,46 +17,111 @@ def fix_id(doc):
     return doc
 
 # ==========================================
-# 0. LÓGICA CIENTÍFICA (Perfil Cognitivo)
+# 3. ANÁLISIS Y RESULTADOS
 # ==========================================
-def calculate_cognitive_profile(metrics: Dict[str, Any]) -> Dict[str, int]:
-    """
-    Genera un perfil de 4 dimensiones (0-100) basado en datos crudos.
-    """
-    # 1. ATENCIÓN (Basado en Omisiones)
-    omissions = metrics.get("omission_errors", 0)
-    attn_score = max(0, 100 - (omissions * 15)) 
+@router.post("/analyze", response_model=schemas.AnalysisOutput)
+def analyze_game_result(data: schemas.GameResultInput):
+    metrics = data.detailed_metrics
+    
+    # 1. Calcular Perfil (IA)
+    profile = ai_engine.calculate_profile(metrics)
+    verdict = ai_engine.predict_verdict(profile)
 
-    # 2. IMPULSIVIDAD (Basado en Comisiones)
-    commissions = metrics.get("commission_errors", 0)
-    impulse_control = max(0, 100 - (commissions * 10))
+    # 2. LOGICA DE LOGROS (GAMIFICACIÓN)
+    new_badges = []
+    
+    # A) Logro: Primer Paso (Siempre que juega, si no lo tiene, se lo damos)
+    # (Esto se valida al guardar en la BD para no duplicar)
+    
+    # B) Logro: Ojo de Águila (CPT Precisión > 90%)
+    if data.game_code == 'cpt' and profile["atencion"] >= 90:
+        new_badges.append("sniper_cpt")
+        
+    # C) Logro: Mente Zen (Go/No-Go 0 Comisiones)
+    if data.game_code == 'go_no_go' and metrics.get("commission_errors", 0) == 0:
+        new_badges.append("zen_master")
+        
+    # D) Logro: Rayo Veloz (Vigilancia Velocidad > 85)
+    if data.game_code == 'vigilance' and profile["velocidad"] >= 85:
+        new_badges.append("speed_demon")
 
-    # 3. VELOCIDAD (Basado en Promedio ms)
-    rt_avg = metrics.get("reaction_time_avg", 0)
-    if rt_avg == 0: speed_score = 0
-    elif rt_avg < 250: speed_score = 100 # Sospechosamente rápido
-    elif rt_avg > 800: speed_score = 40  # Lento
-    else: speed_score = 100 - ((rt_avg - 250) * 0.12)
+    # E) Logro: Cerebro Galáctico (TMT 0 Errores)
+    if data.game_code == 'tmt' and metrics.get("commission_errors", 0) == 0:
+        new_badges.append("brainy")
 
-    # 4. CONSISTENCIA (Desviación Estándar - Marcador clave TDAH)
-    rt_raw = metrics.get("reaction_times_raw", [])
-    if len(rt_raw) > 1:
-        stdev = statistics.stdev(rt_raw)
-        # stdev < 80ms es excelente (100). stdev > 200ms es muy inconsistente.
-        consistency_score = max(0, 100 - ((stdev - 50) * 0.5))
-    else:
-        consistency_score = 50 # Neutro si no hay datos
+    # 3. Guardar Resultado
+    result_doc = {
+        "child_id": data.child_id,
+        "game_code": data.game_code,
+        "score": data.score,
+        "metrics": metrics,
+        "cognitive_profile": profile, 
+        "ai_diagnosis": verdict,
+        "timestamp": datetime.utcnow()
+    }
+    results_collection.insert_one(result_doc)
+
+    # 4. ACTUALIZAR PERFIL DEL NIÑO (Guardar logros nuevos)
+    # Usamos $addToSet de Mongo para no duplicar si ya lo tenía
+    if new_badges:
+        children_collection.update_one(
+            {"_id": ObjectId(data.child_id)},
+            {"$addToSet": {"achievements": {"$each": new_badges}}}
+        )
+
+    # Retornamos el primer logro nuevo encontrado para mostrarlo en el frontend como "Badge Awarded"
+    # (Simplificación para la UI actual)
+    primary_badge = new_badges[0] if new_badges else None
 
     return {
-        "atencion": round(attn_score),
-        "impulsividad": round(impulse_control),
-        "velocidad": round(speed_score),
-        "consistencia": round(consistency_score)
+        "verdict": verdict,
+        "confidence_score": 0.92,
+        "badge_awarded": primary_badge # Enviamos el ID del logro (ej: 'sniper_cpt')
     }
 
 # ==========================================
-# 1. USUARIOS Y AUTH
+# 4. DASHBOARD DETALLADO
 # ==========================================
+
+@router.get("/children/{child_id}/dashboard", response_model=schemas.ChildDashboard)
+def get_child_dashboard(child_id: str):
+    if not ObjectId.is_valid(child_id):
+        raise HTTPException(status_code=400, detail="ID inválido")
+
+    child_doc = children_collection.find_one({"_id": ObjectId(child_id)})
+    if not child_doc: raise HTTPException(status_code=404, detail="No encontrado")
+
+    cursor = results_collection.find({"child_id": child_id}).sort("timestamp", -1)
+    results_list = []
+    badges_set = set()
+
+    for doc in cursor:
+        results_list.append({
+            "game_code": doc.get("game_code"),
+            "timestamp": doc.get("timestamp"),
+            "ai_diagnosis": doc.get("ai_diagnosis"),
+            "metrics": doc.get("metrics"),
+            "badge": doc.get("badge"),
+            "score": doc.get("score", 0),
+            # --- AGREGAR ESTA LÍNEA ES VITAL ---
+            # Enviamos el perfil calculado por la IA al frontend
+            "cognitive_profile": doc.get("cognitive_profile") 
+            # -----------------------------------
+        })
+        if doc.get("badge"): badges_set.add(doc.get("badge"))
+
+    return {
+        "child_info": fix_id(child_doc),
+        "recent_results": results_list,
+        "badges_earned": list(badges_set)
+    }
+
+# (MANTÉN EL RESTO DEL ARCHIVO IGUAL: create_user, login, create_child, etc.)
+# Solo asegúrate de copiar las funciones modificadas arriba y pegarlas en su lugar.
+# Si prefieres, copia todo el bloque de importaciones para arreglar lo de 'statistics'.
+# -----------------------------------------------------------------------------
+# A CONTINUACIÓN, EL RESTO DE RUTAS NECESARIAS PARA QUE NO TENGAS ERRORES DE COPIA:
+
 @router.post("/users/", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate):
     if users_collection.find_one({"email": user.email}):
@@ -70,9 +136,6 @@ def login(creds: schemas.LoginInput):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     return {"user_id": str(user["_id"]), "username": user["username"]}
 
-# ==========================================
-# 2. GESTIÓN DE NIÑOS
-# ==========================================
 @router.post("/users/{user_id}/children/", response_model=schemas.ChildOut)
 def create_child(user_id: str, child: schemas.ChildCreate):
     if not ObjectId.is_valid(user_id):
@@ -89,10 +152,6 @@ def create_child(user_id: str, child: schemas.ChildCreate):
 
 @router.get("/users/{user_id}/children")
 def get_user_children(user_id: str):
-    """
-    Obtiene hijos Y su último perfil cognitivo para el Dashboard.
-    Nota: Retornamos Dict libre para incluir 'latest_profile' sin error de Schema.
-    """
     if not ObjectId.is_valid(user_id):
         raise HTTPException(status_code=400, detail="ID inválido")
 
@@ -101,7 +160,6 @@ def get_user_children(user_id: str):
     
     for doc in cursor:
         child = fix_id(doc)
-        # Buscar el resultado más reciente de este niño para el gráfico
         last_result = results_collection.find_one(
             {"child_id": child["id"]}, 
             sort=[("timestamp", -1)]
@@ -128,74 +186,3 @@ def delete_child(child_id: str):
     results_collection.delete_many({"child_id": child_id})
 
     return {"message": "Perfil eliminado correctamente"}
-
-# ==========================================
-# 3. ANÁLISIS Y RESULTADOS
-# ==========================================
-@router.post("/analyze", response_model=schemas.AnalysisOutput)
-def analyze_game_result(data: schemas.GameResultInput):
-    metrics = data.detailed_metrics
-    
-    # --- DELEGAMOS LA INTELIGENCIA AL MOTOR ---
-    
-    # 1. Calcular Perfil (Usando el motor)
-    profile = ai_engine.calculate_profile(metrics)
-    
-    # 2. Obtener Veredicto (Usando el motor)
-    verdict = ai_engine.predict_verdict(profile)
-
-    # 3. Calcular Medalla (Lógica de negocio simple)
-    badge = None
-    if profile["atencion"] >= 95 and profile["impulsividad"] >= 95:
-        badge = "Defensor Perfecto"
-    elif profile["velocidad"] > 90 and profile["consistencia"] > 80:
-        badge = "Rayo Láser"
-
-    # 4. Guardar en Mongo
-    result_doc = {
-        "child_id": data.child_id,
-        "game_code": data.game_code,
-        "metrics": metrics,
-        "cognitive_profile": profile, 
-        "ai_diagnosis": verdict,
-        "badge": badge,
-        "timestamp": datetime.utcnow()
-    }
-    results_collection.insert_one(result_doc)
-
-    return {
-        "verdict": verdict,
-        "confidence_score": 0.92,
-        "badge_awarded": badge
-    }
-
-# ==========================================
-# 4. DASHBOARD DETALLADO
-# ==========================================
-@router.get("/children/{child_id}/dashboard", response_model=schemas.ChildDashboard)
-def get_child_dashboard(child_id: str):
-    if not ObjectId.is_valid(child_id):
-        raise HTTPException(status_code=400, detail="ID inválido")
-
-    child_doc = children_collection.find_one({"_id": ObjectId(child_id)})
-    if not child_doc: raise HTTPException(status_code=404, detail="No encontrado")
-
-    cursor = results_collection.find({"child_id": child_id}).sort("timestamp", -1)
-    results_list = []
-    badges_set = set()
-
-    for doc in cursor:
-        results_list.append({
-            "game_code": doc.get("game_code"),
-            "timestamp": doc.get("timestamp"),
-            "ai_diagnosis": doc.get("ai_diagnosis"),
-            "metrics": doc.get("metrics"),
-            "badge": doc.get("badge")
-        })
-        if doc.get("badge"): badges_set.add(doc.get("badge"))
-
-    return {
-        "child_info": fix_id(child_doc),
-        "recent_results": results_list,
-        "badges_earned": list(badges_set)
-    }

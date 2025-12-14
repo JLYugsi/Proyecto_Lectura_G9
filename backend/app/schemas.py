@@ -81,6 +81,8 @@ class ResultHistory(BaseModel):
     ai_diagnosis: str
     metrics: Dict[str, Any]
     badge: Optional[str] = None
+    score: Optional[int] = 0
+    cognitive_profile: Optional[CognitiveProfile] = None
 
 class ChildDashboard(BaseModel):
     """El perfil completo al entrar a detalles"""

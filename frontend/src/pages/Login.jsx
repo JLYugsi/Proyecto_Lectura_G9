@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginUser, registerUser } from '../services/api';
-// IMPORTAMOS EL MONSTRUO
 import AnimatedMonster from '../components/AnimatedMonster'; 
 
 const Login = () => {
@@ -12,20 +11,28 @@ const Login = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  
+  // ESTADO: Controla si el monstruo se tapa los ojos
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    // ... (MANTÉN TU LÓGICA DE SUBMIT EXACTAMENTE IGUAL QUE ANTES) ...
     e.preventDefault();
     setError('');
     setSuccessMsg('');
+    
+    if (isRegistering && password.length < 6) {
+        setError('La contraseña debe tener al menos 6 caracteres.');
+        return;
+    }
+
     try {
         if (isRegistering) {
             if (password !== confirmPassword) { setError('Las contraseñas no coinciden.'); return; }
             await registerUser({ username, email, password });
             setSuccessMsg('¡Cuenta creada! Inicia sesión.');
-            setIsRegistering(false);
-            setPassword(''); setConfirmPassword('');
+            setIsRegistering(false); setPassword(''); setConfirmPassword('');
         } else {
             const data = await loginUser(username, password);
             localStorage.setItem('user_id', data.user_id);
@@ -33,96 +40,118 @@ const Login = () => {
             navigate('/dashboard');
         }
     } catch (err) {
-        setError(err.response?.data?.detail || 'Error de conexión');
+        setError(err.response?.data?.detail || 'Error de conexión.');
     }
   };
 
   return (
-    <div className="container-fluid vh-100 overflow-hidden">
-      <div className="row h-100">
+    <div className="container-fluid vh-100 w-100 overflow-hidden p-0 bg-white">
+      <div className="row h-100 g-0">
         
-        {/* --- COLUMNA IZQUIERDA: AHORA CON EL MONSTRUO --- */}
-        <div className="col-md-7 d-none d-md-flex flex-column align-items-center justify-content-center text-white p-5 position-relative">
-            {/* Fondo degradado suave y moderno */}
+        {/* --- COLUMNA IZQUIERDA: VISUAL --- */}
+        <div className="col-md-7 d-none d-md-flex flex-column align-items-center justify-content-center position-relative p-5 text-white h-100">
+            
+            {/* FONDO DEGRADADO CORREGIDO (Más contraste y luminosidad) */}
             <div style={{
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                background: 'linear-gradient(135deg, #4F46E5 0%, #a680ffff 100%)', // Indigo a Violeta
-                zIndex: -1
+                position: 'absolute', 
+                top: 0, left: 0, right: 0, bottom: 0,
+                // Degradado más suave y luminoso: Índigo claro a Violeta claro
+                background: 'linear-gradient(135deg, #818cf8 0%, #c084fc 100%)', 
+                zIndex: 0
             }}></div>
 
-            {/* Componente del Monstruo */}
-            <div className="mb-4" style={{ transform: 'scale(1.2)' }}>
-                <AnimatedMonster />
-            </div>
+            <div style={{ zIndex: 2, textAlign: 'center' }}>
+                <div className="mb-4 transition-transform" style={{ transform: 'scale(1.4)' }}>
+                    <AnimatedMonster isBlind={isPasswordFocused} />
+                </div>
 
-            <h1 className="display-4 fw-bold mb-3 animate__animated animate__fadeInUp">NeuroGame</h1>
-            <p className="fs-5 text-center px-5 animate__animated animate__fadeInUp animate__delay-1s" style={{ opacity: 0.9 }}>
-                {isRegistering 
-                    ? "Únete a nuestra plataforma de detección temprana basada en gamificación e IA." 
-                    : "Un entorno seguro y divertido para evaluar el desarrollo cognitivo de tus hijos."}
-            </p>
+                <h1 className="display-3 fw-bolder mb-3 animate__animated animate__fadeInUp" 
+                    style={{ textShadow: '0 4px 12px rgba(0,0,0,0.2)', letterSpacing: '-1px' }}>
+                    NeuroGame
+                </h1>
+                <p className="fs-4 fw-light px-5 animate__animated animate__fadeInUp animate__delay-0.5s" 
+                   style={{ opacity: 0.95, maxWidth: '600px', margin: '0 auto', lineHeight: '1.4', fontWeight: '400' }}>
+                    {isRegistering 
+                        ? "Detección temprana de TDAH mediante evaluación gamificada e Inteligencia Artificial." 
+                        : "Tu plataforma de evaluación cognitiva. Segura, divertida y precisa."}
+                </p>
+            </div>
         </div>
 
-        {/* --- COLUMNA DERECHA: FORMULARIO (Igual que antes pero con retoques) --- */}
-        <div className="col-md-5 d-flex align-items-center justify-content-center bg-white h-100 shadow-lg">
-          
-          <div className="p-5" style={{ width: '100%', maxWidth: '450px' }}>
-             {/* Logo pequeño para móvil (ya que el monstruo se oculta en móvil) */}
+        {/* --- COLUMNA DERECHA: FORMULARIO (Sin cambios) --- */}
+        <div className="col-md-5 d-flex align-items-center justify-content-center bg-white h-100 shadow-lg py-5" style={{zIndex: 10}}>
+          <div className="p-5 w-100 animate__animated animate__fadeIn" style={{ maxWidth: '500px' }}>
+             
              <div className="d-md-none text-center mb-4">
-                 <h2 className="fw-bold text-primary">NeuroGame</h2>
+                 <h2 className="fw-bold text-primary display-5">NeuroGame</h2>
              </div>
 
-             <h2 className="fw-bold text-dark mb-2">
-                {isRegistering ? 'Crear una cuenta' : '¡Hola de nuevo!'}
-             </h2>
-             <p className="text-muted mb-4">
-                {isRegistering ? 'Comienza el viaje hoy mismo.' : 'Ingresa tus datos para continuar.'}
-             </p>
+             <div className="mb-5 pb-2 border-bottom">
+                 <h2 className="fw-bold text-dark mb-2 display-6">
+                    {isRegistering ? 'Crear Cuenta' : 'Bienvenido'}
+                 </h2>
+                 <p className="text-muted fs-5">
+                    {isRegistering ? 'Completa los datos para comenzar el viaje.' : 'Ingresa tus credenciales para continuar.'}
+                 </p>
+             </div>
 
-             {/* ALERTAS DE ERROR/EXITO */}
-             {error && <div className="alert alert-danger py-2 small rounded-3">{error}</div>}
-             {successMsg && <div className="alert alert-success py-2 small rounded-3">{successMsg}</div>}
+             {error && <div className="alert alert-danger py-3 rounded-3 fw-semibold d-flex align-items-center animate__animated animate__headShake"><i className="bi bi-exclamation-triangle-fill me-2 fs-5"></i> {error}</div>}
+             {successMsg && <div className="alert alert-success py-3 rounded-3 fw-semibold d-flex align-items-center animate__animated animate__fadeIn"><i className="bi bi-check-circle-fill me-2 fs-5"></i> {successMsg}</div>}
 
              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="form-label fw-bold small text-uppercase text-secondary">Usuario</label>
-                  <input type="text" className="form-control form-control-lg bg-light border-0" 
-                         value={username} onChange={(e) => setUsername(e.target.value)} required />
+                <div className="mb-4 form-floating">
+                  <input 
+                    type="text" className="form-control form-control-lg bg-light border-0 fw-bold" id="floatingUser" placeholder="Usuario"
+                    value={username} onChange={(e) => setUsername(e.target.value)} required 
+                  />
+                  <label htmlFor="floatingUser" className="text-muted">Usuario</label>
                 </div>
 
                 {isRegistering && (
-                  <div className="mb-3">
-                    <label className="form-label fw-bold small text-uppercase text-secondary">Email</label>
-                    <input type="email" className="form-control form-control-lg bg-light border-0" 
-                           value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <div className="mb-4 form-floating">
+                    <input 
+                        type="email" className="form-control form-control-lg bg-light border-0 fw-bold" id="floatingEmail" placeholder="Email"
+                        value={email} onChange={(e) => setEmail(e.target.value)} required 
+                    />
+                    <label htmlFor="floatingEmail" className="text-muted">Email</label>
                   </div>
                 )}
 
-                <div className="mb-4">
-                  <label className="form-label fw-bold small text-uppercase text-secondary">Contraseña</label>
-                  <input type="password" className="form-control form-control-lg bg-light border-0" 
-                         value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <div className="mb-4 form-floating">
+                  <input 
+                    type="password" className="form-control form-control-lg bg-light border-0 fw-bold font-monospace" id="floatingPass" placeholder="Contraseña"
+                    value={password} onChange={(e) => setPassword(e.target.value)} 
+                    onFocus={() => setIsPasswordFocused(true)} 
+                    onBlur={() => setIsPasswordFocused(false)}
+                    required 
+                  />
+                   <label htmlFor="floatingPass" className="text-muted">Contraseña</label>
                 </div>
                 
                 {isRegistering && (
-                   <div className="mb-4">
-                     <label className="form-label fw-bold small text-uppercase text-secondary">Confirmar</label>
-                     <input type="password" className="form-control form-control-lg bg-light border-0" 
-                            value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                   <div className="mb-4 form-floating">
+                     <input 
+                        type="password" className="form-control form-control-lg bg-light border-0 fw-bold font-monospace" id="floatingConfirm" placeholder="Confirmar"
+                        value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                        onFocus={() => setIsPasswordFocused(true)}
+                        onBlur={() => setIsPasswordFocused(false)}
+                        required 
+                     />
+                      <label htmlFor="floatingConfirm" className="text-muted">Confirmar Contraseña</label>
                    </div>
                 )}
 
-                <button type="submit" className="btn btn-primary btn-lg w-100 fw-bold shadow-sm transition-all">
-                  {isRegistering ? 'Registrarse' : 'Ingresar'}
+                <button type="submit" className="btn btn-primary btn-lg w-100 fw-bold shadow-sm rounded-3 py-3 fs-5 text-uppercase letter-spacing-1 hover-scale transition-all mt-3">
+                  {isRegistering ? 'Registrarse' : 'Iniciar Sesión'}
                 </button>
              </form>
 
-             <div className="text-center mt-4">
-                <p className="text-muted small">
-                    {isRegistering ? '¿Ya eres miembro?' : '¿Aún no tienes cuenta?'}
-                    <button className="btn btn-link fw-bold text-decoration-none p-0 ms-1"
+             <div className="text-center mt-5">
+                <p className="text-muted mb-0 fs-6">
+                    {isRegistering ? '¿Ya tienes una cuenta?' : '¿Aún no tienes acceso?'}
+                    <button className="btn btn-link fw-bold text-decoration-none p-0 ms-2 text-primary fs-6"
                             onClick={() => { setIsRegistering(!isRegistering); setError(''); setSuccessMsg(''); }}>
-                        {isRegistering ? 'Inicia Sesión' : 'Regístrate'}
+                        {isRegistering ? 'Inicia Sesión aquí' : 'Crea una cuenta gratis'}
                     </button>
                 </p>
              </div>

@@ -10,283 +10,193 @@ class TMTScene extends Phaser.Scene {
   }
 
   create() {
-    // ---------- Estado interno ----------
+    // --- ESTADO INTERNO ---
     this.nodes = [];
-    this.nodeGraphics = this.add.graphics();
-    this.laserGraphics = this.add.graphics();
+    this.lineGraphics = this.add.graphics();
     this.currentIndex = 0;          
     this.sequenceErrors = 0;
     this.reactionTimes = [];
-    this.clickLog = [];
-    this.lastClickTime = null;
     this.gameCompleted = false;
-
-    this.totalNodes = 12;          
+    this.totalNodes = 10; // Reducido a 10 para niños (menos frustrante)
     this.startTime = this.time.now;
+    this.lastClickTime = this.startTime;
 
-    // ---------- Fondo sci-fi ----------
-    this.cameras.main.setBackgroundColor('#020820');
-    this._createStarfield();
+    // --- VISUALES: ESPACIO PROFUNDO ---
+    this.cameras.main.setBackgroundColor('#050b14'); // Azul muy oscuro
+    this._createDeepSpace();
 
-    // ---------- HUD ----------
+    // --- HUD ---
     this._createHUD();
 
-    // ---------- Nodos ----------
+    // --- GENERAR NODOS (ESTRELLAS) ---
     this._createNodes();
 
-    // ---------- Timer ----------
+    // --- TIMER ---
     this.time.addEvent({
-      delay: 100,
-      loop: true,
+      delay: 100, loop: true,
       callback: () => {
+        if(this.gameCompleted) return;
         const elapsed = this.time.now - this.startTime;
         this.timerText.setText(`Tiempo: ${(elapsed / 1000).toFixed(1)} s`);
       }
     });
   }
 
-  // ================== HELPERS VISUALES ==================
-
-  _createStarfield() {
+  _createDeepSpace() {
+    // Nebulosa de fondo
     const g = this.add.graphics();
-    for (let i = 0; i < 120; i++) {
+    g.fillGradientStyle(0x000000, 0x000000, 0x1a237e, 0x0d47a1, 1);
+    g.fillRect(0, 0, this.scale.width, this.scale.height);
+    
+    // Estrellas parpadeantes
+    for (let i = 0; i < 100; i++) {
       const x = Phaser.Math.Between(0, this.scale.width);
       const y = Phaser.Math.Between(0, this.scale.height);
-      const alpha = Phaser.Math.FloatBetween(0.1, 0.8);
-      g.fillStyle(0xffffff, alpha);
-      g.fillCircle(x, y, Phaser.Math.Between(1, 2));
+      const size = Phaser.Math.FloatBetween(1, 3);
+      const star = this.add.circle(x, y, size, 0xffffff, Phaser.Math.FloatBetween(0.2, 0.8));
+      
+      this.tweens.add({
+        targets: star, alpha: 1, scale: 1.5,
+        duration: Phaser.Math.Between(1000, 3000),
+        yoyo: true, repeat: -1
+      });
     }
   }
 
   _createHUD() {
-    this.add.text(
-      this.scale.width / 2, 30,
-      'Ingeniero de Sistemas – Conecta los nodos en orden',
-      { fontFamily: 'Arial', fontSize: '20px', color: '#00ffcc' }
-    ).setOrigin(0.5);
+    this.add.text(this.scale.width / 2, 40, 'CONECTA LAS ESTRELLAS EN ORDEN (1 → 2 → 3...)', 
+      { fontFamily: 'Arial', fontSize: '22px', color: '#ffd700', fontStyle: 'bold' }
+    ).setOrigin(0.5).setShadow(0,0,'#ff0000', 10);
 
-    this.timerText = this.add.text(20, 20, 'Tiempo: 0.0 s', {
-      fontFamily: 'Arial', fontSize: '16px', color: '#ffffff'
-    });
-
-    this.progressText = this.add.text(20, 45, 'Progreso: 0 / 12', {
-      fontFamily: 'Arial', fontSize: '16px', color: '#ffffff'
-    });
-
-    this.errorText = this.add.text(20, 70, 'Errores secuencia: 0', {
-      fontFamily: 'Arial', fontSize: '16px', color: '#ff6666'
-    });
+    this.timerText = this.add.text(20, 20, 'Tiempo: 0.0 s', { fontSize: '18px', color: '#fff' });
+    this.progressText = this.add.text(20, 50, `Progreso: 0 / ${this.totalNodes}`, { fontSize: '18px', color: '#4ade80' });
   }
 
   _createNodes() {
-    this.nodeGraphics.clear();
-    this.nodes = [];
-
-    const margin = 80;
-    const labels = [];
-    for (let i = 1; i <= this.totalNodes; i++) {
-      labels.push(i);
-    }
+    const margin = 100;
+    const labels = Array.from({length: this.totalNodes}, (_, i) => i + 1);
 
     labels.forEach((label) => {
-      const position = this._getNonOverlappingPosition(margin);
+      const pos = this._getNonOverlappingPosition(margin);
+      
+      // La "Estrella" interactiva
+      const starContainer = this.add.container(pos.x, pos.y);
+      
+      // Brillo exterior
+      const glow = this.add.circle(0, 0, 30, 0xffffff, 0.1);
+      this.tweens.add({ targets: glow, scale: 1.2, alpha: 0, duration: 1500, loop: -1 });
 
-      const node = this.add.circle(position.x, position.y, 22, 0x111133);
-      node.setStrokeStyle(2, 0x00ffcc);
-      node.setInteractive({ useHandCursor: true });
-
-      const text = this.add.text(position.x, position.y, String(label), {
-        fontFamily: 'Arial', fontSize: '18px', color: '#ffffff'
+      // Cuerpo de la estrella
+      const starBody = this.add.star(0, 0, 5, 12, 24, 0xffd700); // Amarillo dorado
+      
+      // Texto del número
+      const text = this.add.text(0, 0, String(label), {
+        fontFamily: 'Arial', fontSize: '24px', color: '#000000', fontStyle: 'bold'
       }).setOrigin(0.5);
 
-      node.label = label;
-      node.textObject = text;
-      node.clicked = false;
+      starContainer.add([glow, starBody, text]);
+      
+      // Física e Interacción
+      starBody.setInteractive({ useHandCursor: true });
+      starBody.on('pointerdown', () => this._handleNodeClick(label, starContainer));
 
-      node.on('pointerdown', () => {
-        this._handleNodeClick(node);
-      });
-
-      this.nodes.push(node);
+      this.nodes.push({ label, x: pos.x, y: pos.y, object: starContainer });
     });
-
-    this.progressText.setText(`Progreso: 0 / ${this.totalNodes}`);
   }
 
   _getNonOverlappingPosition(margin) {
-    let x, y;
-    let tries = 0;
-    const minDistance = 70;
-
+    let x, y, tries = 0;
     do {
       x = Phaser.Math.Between(margin, this.scale.width - margin);
-      y = Phaser.Math.Between(margin + 40, this.scale.height - margin);
+      y = Phaser.Math.Between(margin + 60, this.scale.height - margin);
       tries++;
-      if (tries > 100) break;
-    } while (
-      this.nodes.some((n) => {
-        const dx = n.x - x;
-        const dy = n.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < minDistance;
-      })
-    );
-
+    } while (this.nodes.some(n => Phaser.Math.Distance.Between(n.x, n.y, x, y) < 90) && tries < 200);
     return { x, y };
   }
 
-  // ================== LÓGICA DEL JUEGO ==================
-
-  _handleNodeClick(node) {
+  _handleNodeClick(clickedLabel, container) {
     if (this.gameCompleted) return;
 
     const expectedLabel = this.currentIndex + 1;
-    const clickedLabel = node.label;
     const now = this.time.now;
 
-    const isCorrect = clickedLabel === expectedLabel;
-
-    this.clickLog.push({
-      time_ms: now - this.startTime,
-      label: clickedLabel,
-      expected: expectedLabel,
-      correct: isCorrect,
-      x: node.x,
-      y: node.y
-    });
-
-    if (isCorrect) {
-      if (this.lastClickTime !== null) {
-        const rt = now - this.lastClickTime;
-        this.reactionTimes.push(rt);
-      }
+    if (clickedLabel === expectedLabel) {
+      // --- CORRECTO ---
+      this.currentIndex++;
+      const rt = now - this.lastClickTime;
+      this.reactionTimes.push(rt);
       this.lastClickTime = now;
 
-      this._markNodeAsCorrect(node);
+      // Efecto Visual: Estrella activada
+      const starShape = container.list[1]; // El objeto star
+      starShape.setFillStyle(0x00ff00); // Verde
+      this.tweens.add({ targets: container, scale: 1.3, duration: 100, yoyo: true });
 
-      if (this.currentIndex > 0) {
-        const prevNode = this.nodes[this.currentIndex - 1];
-        this._drawLaser(prevNode.x, prevNode.y, node.x, node.y);
+      // Dibujar línea (Rayo de luz)
+      if (this.currentIndex > 1) {
+        const prevNode = this.nodes[clickedLabel - 2];
+        const currNode = this.nodes[clickedLabel - 1];
+        this._drawBeam(prevNode.x, prevNode.y, currNode.x, currNode.y);
       }
 
-      this.currentIndex++;
       this.progressText.setText(`Progreso: ${this.currentIndex} / ${this.totalNodes}`);
 
-      if (this.currentIndex >= this.totalNodes) {
-        this._endGame();
-      }
+      if (this.currentIndex >= this.totalNodes) this._endGame();
+
     } else {
+      // --- ERROR ---
       this.sequenceErrors++;
-      this.errorText.setText(`Errores secuencia: ${this.sequenceErrors}`);
-      this._flashError(node);
+      this.cameras.main.shake(200, 0.01);
+      // Feedback visual rojo
+      const starShape = container.list[1];
+      starShape.setTint(0xff0000);
+      this.time.delayedCall(300, () => starShape.clearTint());
     }
   }
 
-  _markNodeAsCorrect(node) {
-    node.setFillStyle(0x00ffcc, 0.4);
-    node.setStrokeStyle(2, 0xffffff);
-    if (node.textObject) {
-      node.textObject.setColor('#00ffcc');
-    }
-    node.clicked = true;
-  }
-
-  _drawLaser(x1, y1, x2, y2) {
-    this.laserGraphics.lineStyle(3, 0x00ffcc, 0.9);
-    this.laserGraphics.beginPath();
-    this.laserGraphics.moveTo(x1, y1);
-    this.laserGraphics.lineTo(x2, y2);
-    this.laserGraphics.strokePath();
-
-    const glow = this.add.circle(x2, y2, 6, 0x00ffff, 1);
+  _drawBeam(x1, y1, x2, y2) {
+    const line = this.add.line(0, 0, x1, y1, x2, y2, 0x00ffff).setOrigin(0).setLineWidth(4);
+    line.setAlpha(0);
+    this.tweens.add({ targets: line, alpha: 1, duration: 500 });
+    
+    // Partículas en la conexión
+    const particles = this.add.particles(0, 0, 'flare', {
+        x: x1, y: y1,
+        speed: 100, lifespan: 300, quantity: 10, scale: { start: 0.5, end: 0 }, blendMode: 'ADD'
+    });
     this.tweens.add({
-      targets: glow,
-      alpha: 0,
-      scale: 2,
-      duration: 300,
-      onComplete: () => glow.destroy()
+        targets: particles, x: x2, y: y2, duration: 300, onComplete: () => particles.destroy()
     });
   }
-
-  _flashError(node) {
-    const originalColor = node.clicked ? 0x00ffcc : 0x111133;
-    node.setFillStyle(0xff0000, 0.8);
-
-    this.tweens.add({
-      targets: node,
-      duration: 80,
-      repeat: 2,
-      yoyo: true,
-      scaleX: 1.2,
-      scaleY: 1.2,
-      onYoyo: () => {
-        node.setFillStyle(originalColor, 0.8);
-      },
-      onComplete: () => {
-        node.setScale(1);
-        node.setFillStyle(originalColor, 0.8);
-      }
-    });
-  }
-
-  // ================== FIN DEL JUEGO (CORREGIDO) ==================
 
   _endGame() {
     if (this.gameCompleted) return;
     this.gameCompleted = true;
 
-    const endTime = this.time.now;
-    const totalTime = endTime - this.startTime;
+    const totalTime = this.time.now - this.startTime;
+    const avgRt = this.reactionTimes.reduce((a,b)=>a+b,0) / this.reactionTimes.length || 0;
 
-    // Calcular promedio de tiempo de reacción (entre nodos)
-    let avgRt = 0;
-    if (this.reactionTimes.length > 0) {
-      const sum = this.reactionTimes.reduce((a, b) => a + b, 0);
-      avgRt = sum / this.reactionTimes.length;
-    }
-
-    // Cálculo de Score (0-100)
-    let score = 100;
-    score -= this.sequenceErrors * 8; // Penalización por error
-    if (avgRt > 2000) {
-      score -= ((avgRt - 2000) / 100); // Penalización por lentitud extrema
-    }
+    // Cálculo Score (0-100)
+    // Base 100. Restamos 10 puntos por error. Restamos si es muy lento (>25s total)
+    let score = 100 - (this.sequenceErrors * 10);
+    if (totalTime > 25000) score -= (totalTime - 25000) / 1000;
     score = Math.max(0, Math.min(100, Math.round(score)));
 
-    // --- MAPEO DE DATOS PARA EL BACKEND (Vital para el gráfico de radar) ---
-    const detailed_metrics = {
-      // 1. Datos crudos para consistencia (StDev)
-      reaction_times_raw: this.reactionTimes,
-      
-      // 2. Variables estándar del ML
-      reaction_time_avg: Math.round(avgRt),
-      
-      // En TMT, equivocarse de nodo es IMPULSIVIDAD (Comisión)
-      commission_errors: this.sequenceErrors,
-      
-      // En TMT no hay omisiones por tiempo límite en esta versión
-      omission_errors: 0,
-      
-      total_errors: this.sequenceErrors,
-      
-      // Datos extra específicos de TMT
-      tmt_specific: {
-        total_time_ms: Math.round(totalTime),
-        nodes_completed: this.currentIndex
-      }
-    };
-
     const payload = {
-      score,
-      detailed_metrics
+      score: score, // ¡AQUÍ ESTÁ EL ARREGLO!
+      detailed_metrics: {
+        reaction_time_avg: Math.round(avgRt),
+        reaction_times_raw: this.reactionTimes,
+        commission_errors: this.sequenceErrors, // Errores de secuencia
+        omission_errors: 0,
+        total_errors: this.sequenceErrors,
+        tmt_specific: { total_time_ms: Math.round(totalTime) }
+      }
     };
 
-    this.time.delayedCall(800, () => {
-      try {
+    this.time.delayedCall(1000, () => {
         this.onGameEnd(payload);
-      } catch (e) {
-        console.error('Error al enviar resultados TMT:', e);
-      }
-      this.scene.stop();
+        this.scene.stop();
     });
   }
 }
