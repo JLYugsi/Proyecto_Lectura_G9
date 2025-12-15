@@ -21,6 +21,8 @@ def fix_id(doc):
 # ==========================================
 @router.post("/analyze", response_model=schemas.AnalysisOutput)
 def analyze_game_result(data: schemas.GameResultInput):
+    print("📥 analyze payload:", data.game_code, "score:", data.score)
+
     metrics = data.detailed_metrics
     
     # 1. Calcular Perfil (IA)
@@ -41,25 +43,32 @@ def analyze_game_result(data: schemas.GameResultInput):
     if data.game_code == 'go_no_go' and metrics.get("commission_errors", 0) == 0:
         new_badges.append("zen_master")
         
-    # D) Logro: Rayo Veloz (Vigilancia Velocidad > 85)
-    if data.game_code == 'vigilance' and profile["velocidad"] >= 85:
+    # D) Logro: Rayo Veloz (Vigilancia)
+    # Antes: profile["velocidad"] >= 85
+    # Ahora: usar score (más confiable) o profile si existe
+    if data.game_code == 'vigilance' and (data.score >= 85 or profile.get("velocidad", 0) >= 85):
         new_badges.append("speed_demon")
+
 
     # E) Logro: Cerebro Galáctico (TMT 0 Errores)
     if data.game_code == 'tmt' and metrics.get("commission_errors", 0) == 0:
         new_badges.append("brainy")
 
     # 3. Guardar Resultado
+    primary_badge = new_badges[0] if new_badges else None
+
     result_doc = {
         "child_id": data.child_id,
         "game_code": data.game_code,
         "score": data.score,
         "metrics": metrics,
-        "cognitive_profile": profile, 
+        "cognitive_profile": profile,
         "ai_diagnosis": verdict,
+        "badge": primary_badge,  # ✅ GUARDAR BADGE
         "timestamp": datetime.utcnow()
     }
     results_collection.insert_one(result_doc)
+
 
     # 4. ACTUALIZAR PERFIL DEL NIÑO (Guardar logros nuevos)
     # Usamos $addToSet de Mongo para no duplicar si ya lo tenía
@@ -76,8 +85,12 @@ def analyze_game_result(data: schemas.GameResultInput):
     return {
         "verdict": verdict,
         "confidence_score": 0.92,
-        "badge_awarded": primary_badge # Enviamos el ID del logro (ej: 'sniper_cpt')
+        "badge_awarded": primary_badge,
+        "score": data.score,                 # ✅
+        "cognitive_profile": profile,        # ✅
+        "game_code": data.game_code          # ✅ opcional
     }
+
 
 # ==========================================
 # 4. DASHBOARD DETALLADO
